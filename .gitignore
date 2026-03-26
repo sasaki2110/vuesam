@@ -1,0 +1,49 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies & build
+node_modules
+dist
+dist-ssr
+
+# Local / secrets（チーム共有用は .env.example だけコミットするのが一般的）
+.env
+.env.*
+!.env.example
+
+# Tooling
+coverage
+*.local
+*.tsbuildinfo
+.eslintcache
+
+# Editor（拡張のおすすめだけ共有したい場合は下の 2 行に差し替え）
+# .vscode/*
+# !.vscode/extensions.json
+.vscode/
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cypress
+/cypress/videos/
+/cypress/screenshots/
+
+# Vitest
+__screenshots__/
+
+# Vite
+*.timestamp-*-*.mjs
