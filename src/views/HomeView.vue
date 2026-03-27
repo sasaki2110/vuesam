@@ -61,12 +61,31 @@ async function runLoginAndGoOrders(username: string, password: string) {
     smokeBusy.value = false
   }
 }
+
+async function runLoginAndGoOrdersAlt(username: string, password: string) {
+  smokeError.value = ''
+  smokeLog.value = ''
+  smokeBusy.value = true
+  try {
+    const { accessToken } = await login(username, password)
+    sessionStorage.setItem('accessToken', accessToken)
+    logLine('login OK, go to /orders/new-alt')
+    await router.push('/orders/new-alt')
+  } catch (e) {
+    smokeError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    smokeBusy.value = false
+  }
+}
 </script>
 
 <template>
   <div class="home">
     <h1 class="title">生産管理デモ</h1>
-    <RouterLink to="/orders/new" class="cta">受注登録画面へ</RouterLink>
+    <div class="entry-links">
+      <RouterLink to="/orders/new" class="cta">受注登録画面へ</RouterLink>
+      <RouterLink to="/orders/new-alt" class="cta cta-sub">受注登録画面（横展開サンプル）へ</RouterLink>
+    </div>
 
     <details class="dev-smoke">
       <summary>API 疎通（開発用）</summary>
@@ -93,6 +112,14 @@ async function runLoginAndGoOrders(username: string, password: string) {
           @click="runLoginAndGoOrders('demo', 'password')"
         >
           ログイン → 受注登録画面へ
+        </button>
+        <button
+          type="button"
+          class="dev-btn"
+          :disabled="smokeBusy"
+          @click="runLoginAndGoOrdersAlt('demo', 'password')"
+        >
+          ログイン → 横展開サンプル画面へ
         </button>
       </div>
       <p v-if="smokeError" class="dev-err">{{ smokeError }}</p>
@@ -193,6 +220,12 @@ async function runLoginAndGoOrders(username: string, password: string) {
   letter-spacing: 0.02em;
 }
 
+.entry-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .cta {
   display: inline-flex;
   align-items: center;
@@ -207,6 +240,14 @@ async function runLoginAndGoOrders(username: string, password: string) {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(30, 58, 95, 0.25);
   transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cta-sub {
+  background: #334155;
+}
+
+.cta-sub:hover {
+  background: #3f5168;
 }
 
 .cta:hover {

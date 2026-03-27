@@ -14,7 +14,13 @@ const router = createRouter({
       path: '/orders/new',
       name: 'order-new',
       component: OrderNewView,
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, orderScreenSpec: 'order-new' },
+    },
+    {
+      path: '/orders/new-alt',
+      name: 'order-new-alt',
+      component: OrderNewView,
+      meta: { requiresAuth: true, orderScreenSpec: 'order-new-alt' },
     },
   ],
 })

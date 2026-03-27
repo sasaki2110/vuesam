@@ -11,11 +11,22 @@ import {
   type SuppressKeyboardEventParams,
 } from 'ag-grid-community'
 import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
+import { useRoute } from 'vue-router'
 import MasterCombobox from '@/components/MasterCombobox.vue'
 import ProductCodeCellEditor from '@/components/grid/ProductCodeCellEditor.vue'
 import { PARTIES, PRODUCTS } from '@/constants/mockData'
 import type { CodeMasterItem } from '@/constants/mockData'
-import type { OrderLine } from '@/types/order'
+import {
+  buildColumnsBySpec,
+  createEmptyOrderRows,
+  createNextOrderRow,
+  isOrderLineFilled,
+  ORDER_EDIT_COLS,
+  ORDER_ENTER_NAV_COL_KEYS,
+  resolveOrderScreenSpec,
+  type OrderLineRow,
+} from '@/features/order-screen/orderNewSpec'
+import { applyOrderCommitSpec } from '@/features/order-screen/orderCommitSpec'
 
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-balham.css'
@@ -23,24 +34,10 @@ import 'ag-grid-community/styles/ag-theme-balham.css'
 ModuleRegistry.registerModules([AllCommunityModule])
 
 const popupParentEl = shallowRef<HTMLElement | null>(null)
-
-type OrderLineRow = OrderLine & { lineNo: number }
-
-const INITIAL_ROWS = 18
-
-function createEmptyRows(): OrderLineRow[] {
-  return Array.from({ length: INITIAL_ROWS }, (_, i) => ({
-    lineNo: i + 1,
-    productCode: '',
-    productName: '',
-    quantity: 0,
-    unitPrice: 0,
-    amount: 0,
-  }))
-}
-
-const EDIT_COLS = ['productCode', 'quantity', 'unitPrice'] as const
-const ENTER_NAV_COL_KEYS = new Set<string>(['quantity', 'unitPrice'])
+const route = useRoute()
+const activeSpec = computed(() =>
+  resolveOrderScreenSpec(route.meta.orderScreenSpec as string | undefined),
+)
 
 function isAutocompleteListOpen(input: EventTarget | null): boolean {
   if (!(input instanceof HTMLInputElement)) return false
@@ -73,7 +70,7 @@ const deliveryLocation = ref('')
 const dueDate = ref('')
 const forecastNumber = ref('')
 
-const rowData = ref<OrderLineRow[]>(createEmptyRows())
+const rowData = ref<OrderLineRow[]>(createEmptyOrderRows())
 const gridApi = shallowRef<GridApi<OrderLineRow> | null>(null)
 const advanceRowOnStop = ref(false)
 
@@ -109,7 +106,7 @@ function handleNew() {
   deliveryLocation.value = ''
   dueDate.value = ''
   forecastNumber.value = ''
-  rowData.value = createEmptyRows()
+  rowData.value = createEmptyOrderRows()
   requestAnimationFrame(() => refContract.value?.focus())
 }
 
@@ -122,7 +119,7 @@ function handleSave() {
     forecastNumber: forecastNumber.value,
   }
   const lines = rowData.value.filter(
-    (r) => r.productCode.trim() !== '' || r.quantity > 0 || r.unitPrice > 0,
+    (r) => isOrderLineFilled(r),
   )
   console.info('[保存モック]', { header, lines })
   alert('保存しました（コンソールにモック出力）')
@@ -134,29 +131,7 @@ function onGridReady(e: GridReadyEvent<OrderLineRow>) {
 }
 
 function onCellValueChanged(e: CellValueChangedEvent<OrderLineRow>) {
-  const { colDef, node, data } = e
-  if (!node || !data || !colDef.field) return
-
-  if (colDef.field === 'productCode') {
-    const raw = String(e.newValue ?? '').trim()
-    const upper = raw.toUpperCase()
-    const hit =
-      PRODUCTS.find((p) => p.code === raw) ?? PRODUCTS.find((p) => p.code.toUpperCase() === upper)
-    node.setDataValue('productName', hit?.name ?? '')
-    if (raw) {
-      const row = node.rowIndex ?? 0
-      requestAnimationFrame(() => {
-        e.api.setFocusedCell(row, 'quantity')
-        e.api.startEditingCell({ rowIndex: row, colKey: 'quantity' })
-      })
-    }
-  }
-
-  if (colDef.field === 'quantity' || colDef.field === 'unitPrice') {
-    const q = Number(data.quantity) || 0
-    const u = Number(data.unitPrice) || 0
-    node.setDataValue('amount', q * u)
-  }
+  applyOrderCommitSpec(e, PRODUCTS)
 }
 
 function moveToNextCellAfterEdit(e: CellEditingStoppedEvent<OrderLineRow>) {
@@ -165,21 +140,21 @@ function moveToNextCellAfterEdit(e: CellEditingStoppedEvent<OrderLineRow>) {
 
   const api = e.api
   const colId = e.column.getColId()
-  const idx = EDIT_COLS.indexOf(colId as (typeof EDIT_COLS)[number])
+  const idx = ORDER_EDIT_COLS.indexOf(colId as (typeof ORDER_EDIT_COLS)[number])
   if (idx === -1) return
 
   const row = e.node.rowIndex ?? 0
   const nextIdx = idx + 1
 
-  if (nextIdx < EDIT_COLS.length) {
-    const colKey = EDIT_COLS[nextIdx]!
+  if (nextIdx < ORDER_EDIT_COLS.length) {
+    const colKey = ORDER_EDIT_COLS[nextIdx]!
     api.setFocusedCell(row, colKey)
     api.startEditingCell({ rowIndex: row, colKey })
     return
   }
 
   const nextRow = row + 1
-  const col0 = EDIT_COLS[0]!
+  const col0 = ORDER_EDIT_COLS[0]!
   const rowCount = api.getDisplayedRowCount()
 
   if (nextRow < rowCount) {
@@ -190,16 +165,7 @@ function moveToNextCellAfterEdit(e: CellEditingStoppedEvent<OrderLineRow>) {
 
   rowData.value = (() => {
     const prev = rowData.value
-    const lineNo = prev.length > 0 ? Math.max(...prev.map((r) => r.lineNo)) + 1 : 1
-    const added: OrderLineRow = {
-      lineNo,
-      productCode: '',
-      productName: '',
-      quantity: 0,
-      unitPrice: 0,
-      amount: 0,
-    }
-    return [...prev, added]
+    return [...prev, createNextOrderRow(prev)]
   })()
 
   setTimeout(() => {
@@ -237,88 +203,16 @@ function suppressEnterWhileEditing(params: SuppressKeyboardEventParams<OrderLine
       return true
     }
   }
-  if (!ENTER_NAV_COL_KEYS.has(colId)) return false
+  if (!ORDER_ENTER_NAV_COL_KEYS.has(colId)) return false
   ev.preventDefault()
   advanceRowOnStop.value = true
   params.api.stopEditing(false)
   return true
 }
 
-const columnDefs = computed<ColDef<OrderLineRow>[]>(() => [
-  {
-    headerName: '行',
-    field: 'lineNo',
-    width: 52,
-    editable: false,
-    pinned: 'left',
-  },
-  {
-    headerName: '製品コード',
-    field: 'productCode',
-    width: 200,
-    minWidth: 160,
-    editable: true,
-    singleClickEdit: true,
-    cellEditor: ProductCodeCellEditor,
-    cellEditorPopup: true,
-    cellEditorPopupPosition: 'over',
-    valueFormatter: (p) => {
-      const code = String(p.value ?? '').trim()
-      if (!code) return ''
-      const name = PRODUCTS.find((x) => x.code === code)?.name
-      return name ? `${code} ${name}` : code
-    },
-    valueParser: (p) => {
-      const s = String(p.newValue ?? '').trim()
-      if (!s) return ''
-      return s.toUpperCase()
-    },
-  },
-  {
-    headerName: '製品名',
-    field: 'productName',
-    width: 220,
-    editable: false,
-    singleClickEdit: false,
-  },
-  {
-    headerName: '数量',
-    field: 'quantity',
-    width: 88,
-    editable: true,
-    singleClickEdit: true,
-    type: 'numericColumn',
-    valueParser: (p) => {
-      const v = p.newValue
-      if (v === '' || v == null) return 0
-      const n = Number(String(v).replace(/,/g, ''))
-      return Number.isFinite(n) ? n : 0
-    },
-  },
-  {
-    headerName: '単価',
-    field: 'unitPrice',
-    width: 100,
-    editable: true,
-    singleClickEdit: true,
-    type: 'numericColumn',
-    valueParser: (p) => {
-      const v = p.newValue
-      if (v === '' || v == null) return 0
-      const n = Number(String(v).replace(/,/g, ''))
-      return Number.isFinite(n) ? n : 0
-    },
-  },
-  {
-    headerName: '金額',
-    field: 'amount',
-    width: 112,
-    editable: false,
-    type: 'numericColumn',
-    valueFormatter: (p) =>
-      p.value == null ? '' : Number(p.value).toLocaleString('ja-JP'),
-  },
-])
+const columnDefs = computed<ColDef<OrderLineRow>[]>(() =>
+  buildColumnsBySpec(activeSpec.value, PRODUCTS, ProductCodeCellEditor),
+)
 
 const defaultColDef = computed<ColDef<OrderLineRow>>(() => ({
   sortable: false,
@@ -358,7 +252,7 @@ onUnmounted(() => {
 <template>
   <div class="page">
     <header class="hdr">
-      <h1 class="hdr-title">受注登録</h1>
+      <h1 class="hdr-title">{{ activeSpec.title }}</h1>
       <div class="hdr-actions">
         <button type="button" class="btn btn-outline" @click="handleNew">新規（F01）</button>
         <button type="button" class="btn btn-primary" @click="handleSave">保存 (F12)</button>
@@ -425,7 +319,7 @@ onUnmounted(() => {
 
         <section class="card grid-card">
           <p class="hint grid-hint">
-            明細（製品はコンボ入力＋リスト／確定で数量へ／数量・単価は Enter で右へ）
+            {{ activeSpec.gridHint }}
           </p>
           <div class="ag-theme-balham grid-wrap">
             <AgGridVue
