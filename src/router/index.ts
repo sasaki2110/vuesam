@@ -14,8 +14,19 @@ const router = createRouter({
       path: '/orders/new',
       name: 'order-new',
       component: OrderNewView,
+      meta: { requiresAuth: true },
     },
   ],
+})
+
+router.beforeEach((to) => {
+  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
+  if (!requiresAuth) return true
+
+  const token = sessionStorage.getItem('accessToken')
+  if (token) return true
+
+  return { path: '/' }
 })
 
 export default router
