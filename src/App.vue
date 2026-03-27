@@ -1,9 +1,5 @@
-<script setup lang="ts">
-import OrderNewView from '@/views/OrderNewView.vue'
-</script>
-
 <template>
-  <OrderNewView />
+  <RouterView />
 </template>
 
 <style>
