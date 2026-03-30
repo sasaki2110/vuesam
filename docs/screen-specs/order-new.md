@@ -45,6 +45,21 @@
 - F12: 保存（共通デフォルト）
 - F8: モック alert 表示
 
+## マスタ・データソース
+
+| 用途 | API | レスポンス形式 | 備考 |
+|------|-----|--------------|------|
+| 取引先一覧（契約先・納入先のプルダウン候補） | GET /api/masters/parties | `[{ code, name }]` | 契約先・納入先で共用 |
+| 製品一覧（明細のコード選択候補） | GET /api/masters/products | `[{ code, name }]` | |
+
+## 画面アクション → API
+
+| アクション | API | ボディ概要 | レスポンス概要 |
+|-----------|-----|-----------|--------------|
+| 保存（F12） | POST /api/orders | `{ contractPartyCode, deliveryPartyCode, deliveryLocation, dueDate, forecastNumber, lines: [{ productCode, productName, quantity, unitPrice, amount }] }` | `{ orderId, orderNumber, message }` |
+
+詳細な API 仕様は [api-integration-roadmap/phase1-backend.md](../api-integration-roadmap/phase1-backend.md) を参照。
+
 ## 特記事項
 
 - 製品コードのセルエディタはオートコンプリート（候補リスト）付き。リスト表示中は Enter がグリッドに奪われないよう制御する
