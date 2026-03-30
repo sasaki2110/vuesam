@@ -39,6 +39,16 @@
 ### Fキー
 - F8: ＜機能名＞
 
+### マスタ・データソース
+| 用途 | API | レスポンス形式 | 備考 |
+|------|-----|--------------|------|
+| ...  | ... | ...          | ...  |
+
+### 画面アクション → API
+| アクション | API | ボディ概要 | レスポンス概要 |
+|-----------|-----|-----------|--------------|
+| ...       | ... | ...       | ...          |
+
 ### 特記事項
 - ＜例外的なルール・補足＞
 ```
@@ -89,6 +99,45 @@
 
 未割り当ての F キーは何もしない（共通ルール）。
 
+#### マスタ・データソース
+
+プルダウンや候補リストの取得先 API を表で書く。
+
+| 列 | 説明 |
+|----|------|
+| **用途** | 「取引先一覧」「製品一覧」のように、何のための取得か |
+| **API** | `GET /api/masters/parties` のようにメソッド + パス |
+| **レスポンス形式** | `[{ code, name }]` のように概要。完全な JSON は不要 |
+| **備考** | 複数項目で共用する場合など（例: 契約先・納入先で同じ API） |
+
+ヘッダの「マスタ選択」やグリッドの「コード選択」の候補がどの API から来るかを、このセクションで明示する。AI はここを見て `src/api/client.ts` に取得関数を追加し、画面の `onMounted` で呼び出すコードを生成する。
+
+API が未定の段階では `（未定・モック）` と書いてよい。その場合 AI はモックデータで仮実装する。
+
+```markdown
+| 取引先一覧 | GET /api/masters/parties | `[{ code, name }]` | 契約先・納入先で共用 |
+| 製品一覧   | GET /api/masters/products | `[{ code, name }]` |  |
+```
+
+#### 画面アクション → API
+
+F キーやボタン押下時に呼び出す API を表で書く。
+
+| 列 | 説明 |
+|----|------|
+| **アクション** | 「保存（F12）」「読込（F02）」のように操作名 |
+| **API** | `POST /api/orders` のようにメソッド + パス |
+| **ボディ概要** | リクエスト JSON の主要フィールド。全フィールドを網羅しなくてよい |
+| **レスポンス概要** | レスポンス JSON の主要フィールド |
+
+AI はここを見て `src/api/client.ts` にリクエスト型・レスポンス型・呼び出し関数を追加し、画面の `handleSave` 等を POST 呼び出しに置き換える。
+
+リクエスト/レスポンスの JSON サンプルを1件分書いておくと、AI の型生成精度が上がる。ただしサンプルは任意であり、ボディ概要だけでも十分機能する。
+
+```markdown
+| 保存（F12） | POST /api/orders | `{ contractPartyCode, ..., lines: [...] }` | `{ orderId, orderNumber, message }` |
+```
+
 #### 特記事項
 
 上のセクションに収まらない例外ルールを箇条書きで書く。
@@ -117,13 +166,23 @@
 1. 人間が `docs/screen-specs/<screen-id>.md` を作成する
 2. AI に「`docs/screen-specs/<screen-id>.md` を読んで、画面を追加して」と伝える
 3. AI は以下を生成する:
-   - `src/features/<screen>-screen/<screen>NewSpec.ts` — Spec 定義
-   - `src/features/<screen>-screen/<screen>Grid.ts` — 列定義ビルダー
-   - `src/features/<screen>-screen/<screen>CommitRules.ts` — 副作用ルール
-   - `src/features/<screen>-screen/<screen>Types.ts` — 行の型
-   - `src/router/index.ts` へのルート追加
-   - `src/features/screen-engine/screenSpecRegistry.ts` への登録
-   - `src/views/ScreenWorkspaceView.vue` への接続（必要に応じて）
+
+**画面エンジン側（Spec）**:
+- `src/features/<screen>-screen/<screen>NewSpec.ts` — Spec 定義
+- `src/features/<screen>-screen/<screen>Grid.ts` — 列定義ビルダー
+- `src/features/<screen>-screen/<screen>CommitRules.ts` — 副作用ルール
+- `src/features/<screen>-screen/<screen>Types.ts` — 行の型
+- `src/router/index.ts` へのルート追加
+- `src/features/screen-engine/screenSpecRegistry.ts` への登録
+- `src/views/ScreenWorkspaceView.vue` への接続（必要に応じて）
+
+**API 接続側**（マスタ・データソース / 画面アクション → API が記載されている場合）:
+- `src/api/client.ts` にマスタ取得関数を追加（例: `fetchParties`、`fetchProducts`）
+- `src/api/client.ts` にアクション用のリクエスト型・レスポンス型・呼び出し関数を追加（例: `createOrder`）
+- `ScreenWorkspaceView.vue` の `onMounted` でマスタ API を呼び出し、`ref` に格納
+- `handleSave` 等のハンドラをモックから API 呼び出しに差し替え
+
+**API が未定の場合**: 「マスタ・データソース」や「画面アクション → API」が `（未定・モック）` と書かれている場合、AI はモックデータ（`src/constants/mockData.ts` 相当）で仮実装する。API が確定した後に差し替える。
 
 既存の受注画面（`order-new`）と発注画面（`purchase-new`）が **サンプル Spec** として機能する。AI はこれらのパターンを参照して新しい Spec を生成する。
 
