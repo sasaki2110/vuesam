@@ -1,6 +1,6 @@
 import type { ColDef } from 'ag-grid-community'
 import type { OrderLine } from '@/types/order'
-import type { CodeMasterItem } from '@/constants/mockData'
+import type { CodeMasterItem } from '@/types/master'
 import { resolveGridFieldTypePartial } from '@/features/screen-engine/editorRegistry'
 import type {
   HeaderFieldSpec,

@@ -1,8 +1,4 @@
-/** コードマスタ共通形式 */
-export type CodeMasterItem = {
-  code: string
-  name: string
-}
+import type { CodeMasterItem } from '@/types/master'
 
 /** 取引先マスタ（自動車バッテリー業界想定） */
 export const PARTIES: readonly CodeMasterItem[] = [

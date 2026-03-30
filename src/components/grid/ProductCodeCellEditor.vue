@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { CodeMasterItem } from '@/constants/mockData'
+import type { CodeMasterItem } from '@/types/master'
 import type { CodeAutocompleteCellEditorParams } from '@/features/screen-engine/types'
 
 const props = defineProps<{ params: CodeAutocompleteCellEditorParams }>()

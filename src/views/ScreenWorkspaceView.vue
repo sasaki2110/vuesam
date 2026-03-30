@@ -8,10 +8,12 @@ import {
   type GridApi,
   type GridReadyEvent,
 } from 'ag-grid-community'
-import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import ScreenHeaderField from '@/components/ScreenHeaderField.vue'
-import { PARTIES, PRODUCTS } from '@/constants/mockData'
+import { createOrder, fetchParties, fetchProducts } from '@/api/client'
+import { PARTIES as MOCK_PARTIES, PRODUCTS as MOCK_PRODUCTS } from '@/constants/mockData'
+import type { CodeMasterItem } from '@/types/master'
 import type { HeaderFieldSpec } from '@/features/screen-engine/screenSpecTypes'
 import { resolveScreenBundle } from '@/features/screen-engine/screenSpecRegistry'
 import { useGridEnterNav } from '@/features/screen-engine/useGridEnterNav'
@@ -65,6 +67,9 @@ const purchaseHeader = reactive<Record<string, unknown>>(
 
 const orderRowData = ref<OrderLineRow[]>(createEmptyOrderRows())
 const purchaseRowData = ref<PurchaseLineRow[]>(createEmptyPurchaseRows())
+
+const parties = ref<CodeMasterItem[]>([])
+const products = ref<CodeMasterItem[]>([])
 
 const gridApiOrder = shallowRef<GridApi<OrderLineRow> | null>(null)
 const gridApiPurchase = shallowRef<GridApi<PurchaseLineRow> | null>(null)
@@ -167,6 +172,29 @@ function onDateFieldFocus(field: HeaderFieldSpec) {
   }
 }
 
+/** ag-grid-vue3 は v-model が無いと編集内容が親の ref に戻らない。保存時は API から読むのが確実。 */
+function snapshotOrderRowsFromGrid(): OrderLineRow[] {
+  const api = gridApiOrder.value
+  if (!api) return orderRowData.value
+  const rows: OrderLineRow[] = []
+  api.forEachLeafNode((node) => {
+    if (node.data) rows.push(node.data)
+  })
+  rows.sort((a, b) => a.lineNo - b.lineNo)
+  return rows
+}
+
+function snapshotPurchaseRowsFromGrid(): PurchaseLineRow[] {
+  const api = gridApiPurchase.value
+  if (!api) return purchaseRowData.value
+  const rows: PurchaseLineRow[] = []
+  api.forEachLeafNode((node) => {
+    if (node.data) rows.push(node.data)
+  })
+  rows.sort((a, b) => a.lineNo - b.lineNo)
+  return rows
+}
+
 function handleNew() {
   if (bundle.value.kind === 'order') {
     orderNav.resetEnterNavAdvance()
@@ -181,23 +209,48 @@ function handleNew() {
   requestAnimationFrame(() => focusFirstInHeaderChain())
 }
 
-function handleSave() {
+async function handleSave() {
   if (bundle.value.kind === 'order') {
-    const header = {
-      contractPartyCode: (orderHeader.contractParty as { code?: string } | null)?.code ?? '',
-      deliveryPartyCode: (orderHeader.deliveryParty as { code?: string } | null)?.code ?? '',
-      deliveryLocation: String(orderHeader.deliveryLocation ?? ''),
-      dueDate: String(orderHeader.dueDate ?? ''),
-      forecastNumber: String(orderHeader.forecastNumber ?? ''),
-      memoNote: String(orderHeader.memoNote ?? ''),
+    // F12 はグリッドより先に window で拾われるため、編集中のセルは未コミットのまま。
+    // 保存前に確定させてから rowData を読む。
+    gridApiOrder.value?.stopEditing(false)
+    await nextTick()
+    const lines = snapshotOrderRowsFromGrid()
+      .filter((r) => isOrderLineFilled(r))
+      .map((r) => ({
+        productCode: r.productCode,
+        productName: r.productName,
+        quantity: r.quantity,
+        unitPrice: r.unitPrice,
+        amount: r.amount,
+      }))
+    if (lines.length === 0) {
+      alert('明細が1行以上必要です。製品コード・数量・単価などを入力してから保存してください。')
+      return
     }
-    const lines = orderRowData.value.filter((r) => isOrderLineFilled(r))
-    console.info('[保存モック]', { header, lines })
-    alert('保存しました（コンソールにモック出力）')
+    try {
+      const result = await createOrder({
+        contractPartyCode: (orderHeader.contractParty as { code?: string } | null)?.code ?? '',
+        deliveryPartyCode: (orderHeader.deliveryParty as { code?: string } | null)?.code ?? '',
+        deliveryLocation: String(orderHeader.deliveryLocation ?? ''),
+        dueDate: String(orderHeader.dueDate ?? ''),
+        forecastNumber: String(orderHeader.forecastNumber ?? ''),
+        lines,
+      })
+      alert(`受注を登録しました（受注番号: ${result.orderNumber}）`)
+    } catch (e) {
+      console.error('受注登録失敗:', e)
+      alert('受注の登録に失敗しました。コンソールを確認してください。')
+      return
+    }
   } else {
+    gridApiPurchase.value?.stopEditing(false)
+    await nextTick()
     console.info('[発注保存モック]', {
       header: { ...purchaseHeader },
-      lines: purchaseRowData.value.filter((r) => r.materialCode.trim() !== '' || r.qty > 0),
+      lines: snapshotPurchaseRowsFromGrid().filter(
+        (r) => r.materialCode.trim() !== '' || r.qty > 0,
+      ),
     })
     alert('発注を保存しました（コンソールにモック出力）')
   }
@@ -240,14 +293,14 @@ function onPurchaseGridReady(e: GridReadyEvent<PurchaseLineRow>) {
 }
 
 function onOrderCellValueChanged(e: CellValueChangedEvent<OrderLineRow>) {
-  applyOrderCommitSpec(e, PRODUCTS)
+  applyOrderCommitSpec(e, products.value)
 }
 
 function onPurchaseCellValueChanged(e: CellValueChangedEvent<PurchaseLineRow>) {
   applyPurchaseCommitSpec(e)
 }
 
-const orderColumnDefs = computed(() => buildColumnsBySpec(orderSpecResolved.value, PRODUCTS))
+const orderColumnDefs = computed(() => buildColumnsBySpec(orderSpecResolved.value, products.value))
 
 const purchaseColumnDefs = computed(() => buildPurchaseColumnDefs())
 
@@ -272,6 +325,17 @@ const onCellEditingStopped = computed(() =>
 onMounted(() => {
   popupParentEl.value = document.body
   requestAnimationFrame(() => focusFirstInHeaderChain())
+  void (async () => {
+    try {
+      const [p, pr] = await Promise.all([fetchParties(), fetchProducts()])
+      parties.value = p
+      products.value = pr
+    } catch (e) {
+      console.error('マスタ取得失敗:', e)
+      parties.value = [...MOCK_PARTIES]
+      products.value = [...MOCK_PRODUCTS]
+    }
+  })()
 })
 </script>
 
@@ -297,7 +361,7 @@ onMounted(() => {
                 :ref="headerFieldRef(field.id)"
                 v-model="orderHeader[field.id]!"
                 :field="field"
-                :parties="PARTIES"
+                :parties="parties"
                 @enter-next="focusNextAfter(field.id)"
                 @date-focus="onDateFieldFocus(field)"
               />
@@ -309,7 +373,7 @@ onMounted(() => {
                 :ref="headerFieldRef(field.id)"
                 v-model="purchaseHeader[field.id]!"
                 :field="field"
-                :parties="PARTIES"
+                :parties="parties"
                 @enter-next="focusNextAfter(field.id)"
                 @date-focus="onDateFieldFocus(field)"
               />
@@ -324,10 +388,10 @@ onMounted(() => {
           <div class="ag-theme-balham grid-wrap">
             <AgGridVue
               v-if="bundle.kind === 'order'"
+              v-model="orderRowData"
               theme="legacy"
               style="width: 100%; height: 100%"
               :popup-parent="popupParentEl"
-              :row-data="orderRowData"
               :column-defs="orderColumnDefs"
               :default-col-def="defaultColDef"
               :get-row-id="(p: { data: OrderLineRow }) => String(p.data.lineNo)"
@@ -340,10 +404,10 @@ onMounted(() => {
             />
             <AgGridVue
               v-else
+              v-model="purchaseRowData"
               theme="legacy"
               style="width: 100%; height: 100%"
               :popup-parent="popupParentEl"
-              :row-data="purchaseRowData"
               :column-defs="purchaseColumnDefs"
               :default-col-def="defaultColDef"
               :get-row-id="(p: { data: PurchaseLineRow }) => String(p.data.lineNo)"
@@ -375,14 +439,14 @@ onMounted(() => {
           </p>
           <p class="aside-note">※ダミー表示です。実装時はルール／学習モデルと連携してください。</p>
 
-          <h3 class="aside-sub">モックマスタ参照</h3>
+          <h3 class="aside-sub">マスタ一覧（API）</h3>
           <p class="aside-cap">取引先（契約先・納入先）</p>
           <ul class="master-list">
-            <li v-for="p in PARTIES" :key="p.code">{{ p.code }}：{{ p.name }}</li>
+            <li v-for="p in parties" :key="p.code">{{ p.code }}：{{ p.name }}</li>
           </ul>
           <p class="aside-cap">製品（明細）</p>
           <ul class="master-list">
-            <li v-for="p in PRODUCTS" :key="p.code">{{ p.code }}：{{ p.name }}</li>
+            <li v-for="p in products" :key="p.code">{{ p.code }}：{{ p.name }}</li>
           </ul>
         </div>
       </aside>

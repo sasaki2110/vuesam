@@ -1,5 +1,5 @@
 import type { CellValueChangedEvent } from 'ag-grid-community'
-import type { CodeMasterItem } from '@/constants/mockData'
+import type { CodeMasterItem } from '@/types/master'
 import { applyCommitSpec, type CommitRule } from '@/features/screen-engine/applyCommitSpec'
 import type { OrderLineRow } from '@/features/order-screen/orderNewSpec'
 

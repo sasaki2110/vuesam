@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import MasterCombobox from '@/components/MasterCombobox.vue'
-import type { CodeMasterItem } from '@/constants/mockData'
+import type { CodeMasterItem } from '@/types/master'
 import type { HeaderFieldSpec } from '@/features/screen-engine/screenSpecTypes'
 
 const props = defineProps<{

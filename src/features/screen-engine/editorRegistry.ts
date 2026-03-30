@@ -1,5 +1,5 @@
 import type { ColDef } from 'ag-grid-community'
-import type { CodeMasterItem } from '@/constants/mockData'
+import type { CodeMasterItem } from '@/types/master'
 import ProductCodeCellEditor from '@/components/grid/ProductCodeCellEditor.vue'
 
 export const GRID_FIELD_TYPES = [

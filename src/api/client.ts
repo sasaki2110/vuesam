@@ -1,3 +1,5 @@
+import type { CodeMasterItem } from '@/types/master'
+
 const baseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? ''
 
 export function getApiBaseUrl(): string {
@@ -43,4 +45,50 @@ export async function fetchProjects(): Promise<unknown> {
     throw new Error(`projects failed: ${res.status}`)
   }
   return res.json()
+}
+
+export async function fetchParties(): Promise<CodeMasterItem[]> {
+  const url = `${baseUrl}/api/masters/parties`
+  const res = await fetch(url, { headers: authHeader() })
+  if (!res.ok) throw new Error(`fetchParties failed: ${res.status}`)
+  return (await res.json()) as CodeMasterItem[]
+}
+
+export async function fetchProducts(): Promise<CodeMasterItem[]> {
+  const url = `${baseUrl}/api/masters/products`
+  const res = await fetch(url, { headers: authHeader() })
+  if (!res.ok) throw new Error(`fetchProducts failed: ${res.status}`)
+  return (await res.json()) as CodeMasterItem[]
+}
+
+export type OrderCreateRequest = {
+  contractPartyCode: string
+  deliveryPartyCode: string
+  deliveryLocation: string
+  dueDate: string
+  forecastNumber: string
+  lines: {
+    productCode: string
+    productName: string
+    quantity: number
+    unitPrice: number
+    amount: number
+  }[]
+}
+
+export type OrderCreateResponse = {
+  orderId: number
+  orderNumber: string
+  message: string
+}
+
+export async function createOrder(body: OrderCreateRequest): Promise<OrderCreateResponse> {
+  const url = `${baseUrl}/api/orders`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`createOrder failed: ${res.status}`)
+  return (await res.json()) as OrderCreateResponse
 }
