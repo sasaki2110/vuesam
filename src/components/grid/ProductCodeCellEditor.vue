@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { ICellEditorParams } from 'ag-grid-community'
 import type { CodeMasterItem } from '@/constants/mockData'
-import { PRODUCTS } from '@/constants/mockData'
+import type { CodeAutocompleteCellEditorParams } from '@/features/screen-engine/types'
 
-const props = defineProps<{ params: ICellEditorParams }>()
+const props = defineProps<{ params: CodeAutocompleteCellEditorParams }>()
 
 function normalizeCode(raw: string): string {
   return raw.trim().toUpperCase()
@@ -14,7 +13,8 @@ function matchProduct(raw: string): CodeMasterItem | null {
   const q = raw.trim()
   if (!q) return null
   const u = q.toUpperCase()
-  return PRODUCTS.find((p) => p.code === q) ?? PRODUCTS.find((p) => p.code.toUpperCase() === u) ?? null
+  const list = props.params.options
+  return list.find((p) => p.code === q) ?? list.find((p) => p.code.toUpperCase() === u) ?? null
 }
 
 function initFromInitial(initial: string | null | undefined): {
@@ -50,9 +50,10 @@ const dropdownPanelStyle = ref<Record<string, string>>({
 })
 
 const filtered = computed(() => {
+  const list = props.params.options
   const q = inputValue.value.trim().toLowerCase()
-  if (!q) return [...PRODUCTS]
-  return PRODUCTS.filter(
+  if (!q) return [...list]
+  return list.filter(
     (o) => o.code.toLowerCase().includes(q) || o.name.toLowerCase().includes(q),
   )
 })

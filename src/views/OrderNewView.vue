@@ -3,17 +3,14 @@ import { AgGridVue } from 'ag-grid-vue3'
 import {
   AllCommunityModule,
   ModuleRegistry,
-  type CellEditingStoppedEvent,
   type CellValueChangedEvent,
   type ColDef,
   type GridApi,
   type GridReadyEvent,
-  type SuppressKeyboardEventParams,
 } from 'ag-grid-community'
-import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
+import { computed, onMounted, ref, shallowRef } from 'vue'
 import { useRoute } from 'vue-router'
 import MasterCombobox from '@/components/MasterCombobox.vue'
-import ProductCodeCellEditor from '@/components/grid/ProductCodeCellEditor.vue'
 import { PARTIES, PRODUCTS } from '@/constants/mockData'
 import type { CodeMasterItem } from '@/constants/mockData'
 import {
@@ -21,12 +18,12 @@ import {
   createEmptyOrderRows,
   createNextOrderRow,
   isOrderLineFilled,
-  ORDER_EDIT_COLS,
-  ORDER_ENTER_NAV_COL_KEYS,
   resolveOrderScreenSpec,
   type OrderLineRow,
 } from '@/features/order-screen/orderNewSpec'
-import { applyOrderCommitSpec } from '@/features/order-screen/orderCommitSpec'
+import { applyOrderCommitSpec } from '@/features/order-screen/orderCommitRules'
+import { useOrderGridEnterNav } from '@/features/order-screen/useOrderGridEnterNav'
+import { useScreenFunctionKeys } from '@/features/order-screen/useScreenFunctionKeys'
 
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-balham.css'
@@ -38,11 +35,6 @@ const route = useRoute()
 const activeSpec = computed(() =>
   resolveOrderScreenSpec(route.meta.orderScreenSpec as string | undefined),
 )
-
-function isAutocompleteListOpen(input: EventTarget | null): boolean {
-  if (!(input instanceof HTMLInputElement)) return false
-  return input.getAttribute('aria-expanded') === 'true'
-}
 
 function formatJstCalendarDatePlusDays(addDays: number): string {
   const timeZone = 'Asia/Tokyo'
@@ -72,7 +64,18 @@ const forecastNumber = ref('')
 
 const rowData = ref<OrderLineRow[]>(createEmptyOrderRows())
 const gridApi = shallowRef<GridApi<OrderLineRow> | null>(null)
-const advanceRowOnStop = ref(false)
+
+const editChainColIds = computed(() => activeSpec.value.editChainColIds)
+const enterStopEditingColIds = computed(() => activeSpec.value.enterStopEditingColIds)
+
+const { suppressEnterWhileEditing, onCellEditingStopped, resetEnterNavAdvance } =
+  useOrderGridEnterNav({
+    editChainColIds,
+    enterStopEditingColIds,
+    gridApi,
+    rowData,
+    createNextRow: createNextOrderRow,
+  })
 
 const refContract = ref<InstanceType<typeof MasterCombobox> | null>(null)
 const refDelivery = ref<InstanceType<typeof MasterCombobox> | null>(null)
@@ -99,7 +102,7 @@ function focusNextHeader(index: number) {
 }
 
 function handleNew() {
-  advanceRowOnStop.value = false
+  resetEnterNavAdvance()
   gridApi.value?.stopEditing(true)
   contractParty.value = null
   deliveryParty.value = null
@@ -134,84 +137,8 @@ function onCellValueChanged(e: CellValueChangedEvent<OrderLineRow>) {
   applyOrderCommitSpec(e, PRODUCTS)
 }
 
-function moveToNextCellAfterEdit(e: CellEditingStoppedEvent<OrderLineRow>) {
-  if (!advanceRowOnStop.value) return
-  advanceRowOnStop.value = false
-
-  const api = e.api
-  const colId = e.column.getColId()
-  const idx = ORDER_EDIT_COLS.indexOf(colId as (typeof ORDER_EDIT_COLS)[number])
-  if (idx === -1) return
-
-  const row = e.node.rowIndex ?? 0
-  const nextIdx = idx + 1
-
-  if (nextIdx < ORDER_EDIT_COLS.length) {
-    const colKey = ORDER_EDIT_COLS[nextIdx]!
-    api.setFocusedCell(row, colKey)
-    api.startEditingCell({ rowIndex: row, colKey })
-    return
-  }
-
-  const nextRow = row + 1
-  const col0 = ORDER_EDIT_COLS[0]!
-  const rowCount = api.getDisplayedRowCount()
-
-  if (nextRow < rowCount) {
-    api.setFocusedCell(nextRow, col0)
-    api.startEditingCell({ rowIndex: nextRow, colKey: col0 })
-    return
-  }
-
-  rowData.value = (() => {
-    const prev = rowData.value
-    return [...prev, createNextOrderRow(prev)]
-  })()
-
-  setTimeout(() => {
-    const api2 = gridApi.value
-    if (!api2) return
-    api2.setFocusedCell(nextRow, col0)
-    api2.startEditingCell({ rowIndex: nextRow, colKey: col0 })
-  }, 0)
-}
-
-function suppressEnterWhileEditing(params: SuppressKeyboardEventParams<OrderLineRow, unknown>) {
-  if (!params.editing) return false
-  const ev = params.event
-  const colId = params.column.getColId()
-
-  // 製品コードポップアップ: グリッドが ArrowDown/ArrowUp を奪うとプルダウン操作できない
-  if (
-    colId === 'productCode' &&
-    !ev.shiftKey &&
-    !ev.ctrlKey &&
-    !ev.altKey &&
-    (ev.key === 'ArrowDown' || ev.key === 'ArrowUp')
-  ) {
-    return true
-  }
-
-  if (ev.key !== 'Enter' || ev.shiftKey || ev.ctrlKey || ev.altKey) {
-    return false
-  }
-  if (colId === 'productCode') {
-    if (
-      isAutocompleteListOpen(ev.target) ||
-      isAutocompleteListOpen(document.activeElement)
-    ) {
-      return true
-    }
-  }
-  if (!ORDER_ENTER_NAV_COL_KEYS.has(colId)) return false
-  ev.preventDefault()
-  advanceRowOnStop.value = true
-  params.api.stopEditing(false)
-  return true
-}
-
 const columnDefs = computed<ColDef<OrderLineRow>[]>(() =>
-  buildColumnsBySpec(activeSpec.value, PRODUCTS, ProductCodeCellEditor),
+  buildColumnsBySpec(activeSpec.value, PRODUCTS),
 )
 
 const defaultColDef = computed<ColDef<OrderLineRow>>(() => ({
@@ -226,26 +153,11 @@ function onDueFocus() {
   if (dueDate.value === '') dueDate.value = formatJstCalendarDatePlusDays(7)
 }
 
-function onKeyWindow(e: KeyboardEvent) {
-  if (e.key === 'F1') {
-    e.preventDefault()
-    handleNew()
-    return
-  }
-  if (e.key === 'F12') {
-    e.preventDefault()
-    handleSave()
-  }
-}
+useScreenFunctionKeys({ onNew: handleNew, onSave: handleSave })
 
 onMounted(() => {
   popupParentEl.value = document.body
   requestAnimationFrame(() => refContract.value?.focus())
-  window.addEventListener('keydown', onKeyWindow, true)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', onKeyWindow, true)
 })
 </script>
 
@@ -335,7 +247,7 @@ onUnmounted(() => {
               :enter-navigates-vertically-after-edit="false"
               @grid-ready="onGridReady"
               @cell-value-changed="onCellValueChanged"
-              @cell-editing-stopped="moveToNextCellAfterEdit"
+              @cell-editing-stopped="onCellEditingStopped"
             />
           </div>
         </section>

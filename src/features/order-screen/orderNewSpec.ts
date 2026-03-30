@@ -1,18 +1,26 @@
 import type { ColDef } from 'ag-grid-community'
 import type { OrderLine } from '@/types/order'
 import type { CodeMasterItem } from '@/constants/mockData'
+import { resolveGridFieldTypePartial } from '@/features/screen-engine/editorRegistry'
 
 export type OrderLineRow = OrderLine & { lineNo: number }
 
 export const INITIAL_ROWS = 18
-export const ORDER_EDIT_COLS = ['productCode', 'quantity', 'unitPrice'] as const
-export const ORDER_ENTER_NAV_COL_KEYS = new Set<string>(['quantity', 'unitPrice'])
+
+/** Enter で巡回する編集列の順（field / colId と一致させる） */
+const DEFAULT_EDIT_CHAIN_COL_IDS = ['productCode', 'quantity', 'unitPrice'] as const
+/** Enter で編集終了し、次セル／次行へ進む列（製品コードはオートコンプリート側で確定） */
+const DEFAULT_ENTER_STOP_COL_IDS = ['quantity', 'unitPrice'] as const
 
 export type OrderScreenSpec = {
   id: 'order-new' | 'order-new-alt'
   title: string
   gridHint: string
   columnPreset: 'default' | 'alt'
+  /** Enter で順に移動する列 ID（AG Grid の colId / field に一致） */
+  editChainColIds: readonly string[]
+  /** Enter で編集を終了してナビ用フラグを立てる列 ID */
+  enterStopEditingColIds: readonly string[]
 }
 
 export function createEmptyOrderRows(): OrderLineRow[] {
@@ -42,34 +50,26 @@ export function isOrderLineFilled(row: OrderLineRow): boolean {
   return row.productCode.trim() !== '' || row.quantity > 0 || row.unitPrice > 0
 }
 
-function parseNumericCellValue(value: unknown): number {
-  if (value === '' || value == null) return 0
-  const n = Number(String(value).replace(/,/g, ''))
-  return Number.isFinite(n) ? n : 0
-}
-
 export function buildOrderColumnDefs(
   products: readonly CodeMasterItem[],
-  productCodeCellEditor: unknown,
 ): ColDef<OrderLineRow>[] {
   return [
     {
       headerName: '行',
       field: 'lineNo',
       width: 52,
-      editable: false,
       pinned: 'left',
+      ...resolveGridFieldTypePartial<OrderLineRow>({ fieldType: 'readOnlyText' }),
     },
     {
       headerName: '製品コード',
       field: 'productCode',
       width: 200,
       minWidth: 160,
-      editable: true,
-      singleClickEdit: true,
-      cellEditor: productCodeCellEditor,
-      cellEditorPopup: true,
-      cellEditorPopupPosition: 'over',
+      ...resolveGridFieldTypePartial<OrderLineRow>({
+        fieldType: 'codeAutocomplete',
+        params: { options: products },
+      }),
       valueFormatter: (p) => {
         const code = String(p.value ?? '').trim()
         if (!code) return ''
@@ -86,58 +86,52 @@ export function buildOrderColumnDefs(
       headerName: '製品名',
       field: 'productName',
       width: 220,
-      editable: false,
-      singleClickEdit: false,
+      ...resolveGridFieldTypePartial<OrderLineRow>({ fieldType: 'readOnlyText' }),
     },
     {
       headerName: '数量',
       field: 'quantity',
       width: 88,
-      editable: true,
-      singleClickEdit: true,
-      type: 'numericColumn',
-      valueParser: (p) => parseNumericCellValue(p.newValue),
+      ...resolveGridFieldTypePartial<OrderLineRow>({ fieldType: 'numeric' }),
     },
     {
       headerName: '単価',
       field: 'unitPrice',
       width: 100,
-      editable: true,
-      singleClickEdit: true,
-      type: 'numericColumn',
-      valueParser: (p) => parseNumericCellValue(p.newValue),
+      ...resolveGridFieldTypePartial<OrderLineRow>({ fieldType: 'numeric' }),
     },
     {
       headerName: '金額',
       field: 'amount',
       width: 112,
-      editable: false,
       type: 'numericColumn',
       valueFormatter: (p) =>
         p.value == null ? '' : Number(p.value).toLocaleString('ja-JP'),
+      ...resolveGridFieldTypePartial<OrderLineRow>({ fieldType: 'readOnlyText' }),
     },
   ]
 }
 
-function buildOrderAltColumnDefs(
-  products: readonly CodeMasterItem[],
-  productCodeCellEditor: unknown,
-): ColDef<OrderLineRow>[] {
-  const cols = buildOrderColumnDefs(products, productCodeCellEditor)
+function buildOrderAltColumnDefs(products: readonly CodeMasterItem[]): ColDef<OrderLineRow>[] {
+  const cols = buildOrderColumnDefs(products)
   return [
     ...cols,
     {
       headerName: '商品分類',
       colId: 'category',
       width: 120,
-      editable: false,
-      valueGetter: (p) => {
-        const code = String(p.data?.productCode ?? '')
-        if (!code) return ''
-        if (code.startsWith('A')) return '完成品'
-        if (code.startsWith('B')) return '部材'
-        return 'その他'
-      },
+      ...resolveGridFieldTypePartial<OrderLineRow>({
+        fieldType: 'readOnlyComputed',
+        params: {
+          valueGetter: (p) => {
+            const code = String(p.data?.productCode ?? '')
+            if (!code) return ''
+            if (code.startsWith('A')) return '完成品'
+            if (code.startsWith('B')) return '部材'
+            return 'その他'
+          },
+        },
+      }),
     },
   ]
 }
@@ -147,6 +141,8 @@ export const ORDER_NEW_SPEC: OrderScreenSpec = {
   title: '受注登録',
   gridHint: '明細（製品はコンボ入力＋リスト／確定で数量へ／数量・単価は Enter で右へ）',
   columnPreset: 'default',
+  editChainColIds: DEFAULT_EDIT_CHAIN_COL_IDS,
+  enterStopEditingColIds: DEFAULT_ENTER_STOP_COL_IDS,
 }
 
 export const ORDER_NEW_ALT_SPEC: OrderScreenSpec = {
@@ -155,6 +151,8 @@ export const ORDER_NEW_ALT_SPEC: OrderScreenSpec = {
   gridHint:
     '明細（横展開サンプル: 基本挙動は同一、末尾に読み取り専用の商品分類列を追加）',
   columnPreset: 'alt',
+  editChainColIds: DEFAULT_EDIT_CHAIN_COL_IDS,
+  enterStopEditingColIds: DEFAULT_ENTER_STOP_COL_IDS,
 }
 
 export function resolveOrderScreenSpec(key: string | undefined): OrderScreenSpec {
@@ -165,10 +163,9 @@ export function resolveOrderScreenSpec(key: string | undefined): OrderScreenSpec
 export function buildColumnsBySpec(
   spec: OrderScreenSpec,
   products: readonly CodeMasterItem[],
-  productCodeCellEditor: unknown,
 ): ColDef<OrderLineRow>[] {
   if (spec.columnPreset === 'alt') {
-    return buildOrderAltColumnDefs(products, productCodeCellEditor)
+    return buildOrderAltColumnDefs(products)
   }
-  return buildOrderColumnDefs(products, productCodeCellEditor)
+  return buildOrderColumnDefs(products)
 }

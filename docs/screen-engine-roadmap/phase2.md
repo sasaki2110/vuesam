@@ -83,8 +83,8 @@
 }
 ```
 
-- 現在の `orderCommitSpec.ts` のロジックを、上のようなルール配列に移植する
-- 受注用のルールは `orderCommitRules.ts` のように分離する
+- 現在の `orderCommitSpec.ts` のロジックを、上のようなルール配列に移植する（実装では `orderCommitRules.ts` に分離済み）
+- 受注用のルールは `orderCommitRules.ts` に置き、汎用実行は `applyCommitSpec`（`screen-engine`）を使う
 - 画面側は汎用関数 `applyCommitSpec(rules, event, ctx)` を呼ぶだけにする
 
 **動作確認**: 品名の自動入力、金額の再計算、確定後のフォーカス移動が壊れていないこと。
@@ -101,6 +101,18 @@
 
 - [ ] 列定義のコードを見ると、`ProductCodeCellEditor` が直接並んでいない（レジストリ経由か、ビルダー1か所に集約されている）
 - [ ] Spec に「表示専用の計算列」を1つ追加する手順が、ドキュメントとして書ける程度にシンプルになっている
+
+### 読み取り専用の計算列を足す手順（チェックリスト用）
+
+`buildOrderAltColumnDefs` の「商品分類」列と同じパターンでよい。
+
+1. `orderNewSpec.ts` で、列の配列にオブジェクトを1つ追加する。
+2. 次を spread する: `resolveGridFieldTypePartial({ fieldType: 'readOnlyComputed', params: { valueGetter: (p) => ... } })`  
+   - `valueGetter` は AG Grid の `ValueGetterParams` を受け取り、表示したい文字列（または数値）を返す。
+3. 同じオブジェクトに `headerName`・`width` を付ける。`field` がない列は `colId` を付けて列を識別する（例: `category`）。
+4. デフォルト列セットだけに足す場合は `buildOrderColumnDefs` 側に書く。横展開サンプル（alt）だけに足す場合は `buildOrderAltColumnDefs` の `...cols` の後に足す。
+
+参照実装: `buildOrderAltColumnDefs` 内の `headerName: '商品分類'` の列。
 
 ---
 

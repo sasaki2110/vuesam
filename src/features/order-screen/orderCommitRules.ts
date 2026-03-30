@@ -1,20 +1,16 @@
 import type { CellValueChangedEvent } from 'ag-grid-community'
 import type { CodeMasterItem } from '@/constants/mockData'
+import { applyCommitSpec, type CommitRule } from '@/features/screen-engine/applyCommitSpec'
 import type { OrderLineRow } from '@/features/order-screen/orderNewSpec'
 
-type CommitContext = {
+export type OrderCommitContext = {
   event: CellValueChangedEvent<OrderLineRow>
   products: readonly CodeMasterItem[]
 }
 
-type CommitRule = {
-  fields: Array<keyof OrderLineRow>
-  apply: (ctx: CommitContext) => void
-}
-
-const orderCommitRules: CommitRule[] = [
+export const orderCommitRules: CommitRule<OrderLineRow, OrderCommitContext>[] = [
   {
-    fields: ['productCode'],
+    onFields: ['productCode'],
     apply: ({ event, products }) => {
       const { node } = event
       if (!node) return
@@ -35,7 +31,7 @@ const orderCommitRules: CommitRule[] = [
     },
   },
   {
-    fields: ['quantity', 'unitPrice'],
+    onFields: ['quantity', 'unitPrice'],
     apply: ({ event }) => {
       const { node, data } = event
       if (!node || !data) return
@@ -50,12 +46,5 @@ export function applyOrderCommitSpec(
   event: CellValueChangedEvent<OrderLineRow>,
   products: readonly CodeMasterItem[],
 ) {
-  const field = event.colDef.field as keyof OrderLineRow | undefined
-  if (!field) return
-
-  for (const rule of orderCommitRules) {
-    if (rule.fields.includes(field)) {
-      rule.apply({ event, products })
-    }
-  }
+  applyCommitSpec(orderCommitRules, { event, products })
 }
