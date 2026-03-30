@@ -17,6 +17,10 @@
 
 ## 記録
 
+### 2026-03-30 — Phase 4: JSON/YAML 外部化を廃止し、Markdown 画面定義 + AI 生成に変更
+- **決めたこと**: 旧 Phase 4（Spec を JSON/YAML に切り出す）を廃止。代わりに、人間が Markdown テーブルで画面要件を書き、AI コーディング支援が TypeScript Spec を生成する運用にする。定義例は `docs/screen-specs/` に配置。
+- **理由**: Spec の主な編集者は AI であり、TypeScript のまま保持するほうが型安全性・インライン関数・IDE 補完の恩恵がある。人間にとっては Markdown テーブルが最も書きやすく、AI にとっても構造が明確で解釈しやすい。
+
 ### 2026-03-30 — Phase 3: Enter 順・ハンドラ接続・未割当 F キー
 - **決めたこと**: Enter 順は **配列**（`navigationSpec.headerEnterOrder` / `gridEditChainColIds`）。画面固有処理は **マウント時に関数を注入**（`useKeySpec(handlers)`、`handleNew` / `handleSave` など）。`mergeKeySpec` 後も **アクションにハンドラが無い F キーは何もしない**（preventDefault もしない）。
 - **理由**: `phase3.md` の事前決定に合わせ、Spec はデータ、挙動は Vue 側でテストしやすくする。
