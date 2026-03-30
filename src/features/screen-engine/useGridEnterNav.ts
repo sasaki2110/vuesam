@@ -5,25 +5,25 @@ import type {
 } from 'ag-grid-community'
 import type { ShallowRef, Ref, ComputedRef } from 'vue'
 import { computed, ref } from 'vue'
-import type { OrderLineRow } from '@/features/order-screen/orderNewSpec'
 
 function isAutocompleteListOpen(input: EventTarget | null): boolean {
   if (!(input instanceof HTMLInputElement)) return false
   return input.getAttribute('aria-expanded') === 'true'
 }
 
-export type UseOrderGridEnterNavOptions = {
+export type UseGridEnterNavOptions<TRow> = {
   editChainColIds: ComputedRef<readonly string[]>
   enterStopEditingColIds: ComputedRef<readonly string[]>
-  gridApi: ShallowRef<GridApi<OrderLineRow> | null>
-  rowData: Ref<OrderLineRow[]>
-  createNextRow: (prev: OrderLineRow[]) => OrderLineRow
+  gridApi: ShallowRef<GridApi<TRow> | null>
+  rowData: Ref<TRow[]>
+  createNextRow: (prev: TRow[]) => TRow
+  /**
+   * オートコンプリートと Enter/矢印を調整する列（例: 製品コード）。null ならその特例なし。
+   */
+  autocompleteAwareColId: string | null
 }
 
-/** 製品コードセルでオートコンプリートの Enter 競合を避ける対象列 ID */
-const productCodeColId = 'productCode'
-
-export function useOrderGridEnterNav(options: UseOrderGridEnterNavOptions) {
+export function useGridEnterNav<TRow>(options: UseGridEnterNavOptions<TRow>) {
   const advanceRowOnStop = ref(false)
 
   const enterStopSet = computed(
@@ -35,14 +35,16 @@ export function useOrderGridEnterNav(options: UseOrderGridEnterNavOptions) {
   }
 
   function suppressEnterWhileEditing(
-    params: SuppressKeyboardEventParams<OrderLineRow, unknown>,
+    params: SuppressKeyboardEventParams<TRow, unknown>,
   ) {
     if (!params.editing) return false
     const ev = params.event
     const colId = params.column.getColId()
+    const ac = options.autocompleteAwareColId
 
     if (
-      colId === productCodeColId &&
+      ac &&
+      colId === ac &&
       !ev.shiftKey &&
       !ev.ctrlKey &&
       !ev.altKey &&
@@ -54,7 +56,7 @@ export function useOrderGridEnterNav(options: UseOrderGridEnterNavOptions) {
     if (ev.key !== 'Enter' || ev.shiftKey || ev.ctrlKey || ev.altKey) {
       return false
     }
-    if (colId === productCodeColId) {
+    if (ac && colId === ac) {
       if (
         isAutocompleteListOpen(ev.target) ||
         isAutocompleteListOpen(document.activeElement)
@@ -69,7 +71,7 @@ export function useOrderGridEnterNav(options: UseOrderGridEnterNavOptions) {
     return true
   }
 
-  function onCellEditingStopped(e: CellEditingStoppedEvent<OrderLineRow>) {
+  function onCellEditingStopped(e: CellEditingStoppedEvent<TRow>) {
     if (!advanceRowOnStop.value) return
     advanceRowOnStop.value = false
 

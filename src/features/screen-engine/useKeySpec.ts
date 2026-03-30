@@ -1,0 +1,26 @@
+import { onMounted, onUnmounted } from 'vue'
+import { mergeKeySpec } from '@/features/screen-engine/defaultKeySpec'
+import type { FunctionKey, KeyActionId, KeySpec } from '@/features/screen-engine/screenSpecTypes'
+
+export type KeySpecHandlers = Partial<Record<KeyActionId, () => void>>
+
+/**
+ * 現在の Spec の keySpec を参照して F1〜F12 を振り分ける。
+ * アクションに対応するハンドラが無い場合は preventDefault しない（未割り当て扱い）。
+ */
+export function useKeySpec(getKeySpec: () => KeySpec, handlers: KeySpecHandlers) {
+  onMounted(() => {
+    function onKeyWindow(e: KeyboardEvent) {
+      if (!/^F([1-9]|1[0-2])$/.test(e.key)) return
+      const spec = mergeKeySpec(getKeySpec())
+      const action = spec[e.key as FunctionKey]
+      if (!action) return
+      const fn = handlers[action]
+      if (!fn) return
+      e.preventDefault()
+      fn()
+    }
+    window.addEventListener('keydown', onKeyWindow, true)
+    onUnmounted(() => window.removeEventListener('keydown', onKeyWindow, true))
+  })
+}

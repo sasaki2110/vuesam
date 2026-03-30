@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
-import OrderNewView from '@/views/OrderNewView.vue'
+import ScreenWorkspaceView from '@/views/ScreenWorkspaceView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -13,14 +13,20 @@ const router = createRouter({
     {
       path: '/orders/new',
       name: 'order-new',
-      component: OrderNewView,
-      meta: { requiresAuth: true, orderScreenSpec: 'order-new' },
+      component: ScreenWorkspaceView,
+      meta: { requiresAuth: true, screenSpecId: 'order-new' },
     },
     {
       path: '/orders/new-alt',
       name: 'order-new-alt',
-      component: OrderNewView,
-      meta: { requiresAuth: true, orderScreenSpec: 'order-new-alt' },
+      component: ScreenWorkspaceView,
+      meta: { requiresAuth: true, screenSpecId: 'order-new-alt' },
+    },
+    {
+      path: '/purchase/new',
+      name: 'purchase-new',
+      component: ScreenWorkspaceView,
+      meta: { requiresAuth: true, screenSpecId: 'purchase-new' },
     },
   ],
 })

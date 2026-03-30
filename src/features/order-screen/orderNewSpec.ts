@@ -2,26 +2,94 @@ import type { ColDef } from 'ag-grid-community'
 import type { OrderLine } from '@/types/order'
 import type { CodeMasterItem } from '@/constants/mockData'
 import { resolveGridFieldTypePartial } from '@/features/screen-engine/editorRegistry'
+import type {
+  HeaderFieldSpec,
+  KeySpec,
+  NavigationSpec,
+  OrderScreenSpec,
+} from '@/features/screen-engine/screenSpecTypes'
+
+export type { OrderScreenSpec } from '@/features/screen-engine/screenSpecTypes'
 
 export type OrderLineRow = OrderLine & { lineNo: number }
 
 export const INITIAL_ROWS = 18
 
-/** Enter で巡回する編集列の順（field / colId と一致させる） */
-const DEFAULT_EDIT_CHAIN_COL_IDS = ['productCode', 'quantity', 'unitPrice'] as const
-/** Enter で編集終了し、次セル／次行へ進む列（製品コードはオートコンプリート側で確定） */
-const DEFAULT_ENTER_STOP_COL_IDS = ['quantity', 'unitPrice'] as const
+const DEFAULT_GRID_EDIT_CHAIN = ['productCode', 'quantity', 'unitPrice'] as const
+const DEFAULT_GRID_ENTER_STOP = ['quantity', 'unitPrice'] as const
 
-export type OrderScreenSpec = {
-  id: 'order-new' | 'order-new-alt'
-  title: string
-  gridHint: string
-  columnPreset: 'default' | 'alt'
-  /** Enter で順に移動する列 ID（AG Grid の colId / field に一致） */
-  editChainColIds: readonly string[]
-  /** Enter で編集を終了してナビ用フラグを立てる列 ID */
-  enterStopEditingColIds: readonly string[]
+/** 受注ヘッダ（備考は Enter テスト用。チェーンから外すときは navigationSpec.headerEnterOrder から除く） */
+export const ORDER_HEADER_FIELDS: HeaderFieldSpec[] = [
+  {
+    id: 'contractParty',
+    label: '契約先コード',
+    editorType: 'masterCombobox',
+    optionsRef: 'parties',
+    placeholder: '例: 1001',
+  },
+  {
+    id: 'deliveryParty',
+    label: '納入先コード',
+    editorType: 'masterCombobox',
+    optionsRef: 'parties',
+    placeholder: '例: 3001',
+  },
+  {
+    id: 'deliveryLocation',
+    label: '納入場所',
+    editorType: 'text',
+  },
+  {
+    id: 'dueDate',
+    label: '納期',
+    editorType: 'date',
+    defaultDatePlusDays: 7,
+  },
+  {
+    id: 'forecastNumber',
+    label: '内示番号',
+    editorType: 'text',
+    gridColumnSpan: 2,
+  },
+  {
+    id: 'memoNote',
+    label: '備考（Enterテスト用）',
+    editorType: 'text',
+    placeholder: 'Enter チェーンに含める／除外は headerEnterOrder で切替',
+  },
+]
+
+const ORDER_NAV_WITH_MEMO: NavigationSpec = {
+  headerEnterOrder: [
+    'contractParty',
+    'deliveryParty',
+    'deliveryLocation',
+    'dueDate',
+    'forecastNumber',
+    'memoNote',
+  ],
+  gridEntryColumnField: 'productCode',
+  gridEditChainColIds: DEFAULT_GRID_EDIT_CHAIN,
+  gridEnterStopEditingColIds: DEFAULT_GRID_ENTER_STOP,
 }
+
+/** order-new-alt: 備考は表示するが Enter チェーンから除外 */
+const ORDER_NAV_ALT: NavigationSpec = {
+  headerEnterOrder: [
+    'contractParty',
+    'deliveryParty',
+    'deliveryLocation',
+    'dueDate',
+    'forecastNumber',
+  ],
+  gridEntryColumnField: 'productCode',
+  gridEditChainColIds: DEFAULT_GRID_EDIT_CHAIN,
+  gridEnterStopEditingColIds: DEFAULT_GRID_ENTER_STOP,
+}
+
+const ORDER_KEY_SPEC = {
+  F8: 'mockAlert',
+} satisfies KeySpec
 
 export function createEmptyOrderRows(): OrderLineRow[] {
   return Array.from({ length: INITIAL_ROWS }, (_, i) => ({
@@ -140,9 +208,10 @@ export const ORDER_NEW_SPEC: OrderScreenSpec = {
   id: 'order-new',
   title: '受注登録',
   gridHint: '明細（製品はコンボ入力＋リスト／確定で数量へ／数量・単価は Enter で右へ）',
+  headerFields: ORDER_HEADER_FIELDS,
+  navigationSpec: ORDER_NAV_WITH_MEMO,
+  keySpec: ORDER_KEY_SPEC,
   columnPreset: 'default',
-  editChainColIds: DEFAULT_EDIT_CHAIN_COL_IDS,
-  enterStopEditingColIds: DEFAULT_ENTER_STOP_COL_IDS,
 }
 
 export const ORDER_NEW_ALT_SPEC: OrderScreenSpec = {
@@ -150,9 +219,10 @@ export const ORDER_NEW_ALT_SPEC: OrderScreenSpec = {
   title: '受注登録（横展開サンプル）',
   gridHint:
     '明細（横展開サンプル: 基本挙動は同一、末尾に読み取り専用の商品分類列を追加）',
+  headerFields: ORDER_HEADER_FIELDS,
+  navigationSpec: ORDER_NAV_ALT,
+  keySpec: ORDER_KEY_SPEC,
   columnPreset: 'alt',
-  editChainColIds: DEFAULT_EDIT_CHAIN_COL_IDS,
-  enterStopEditingColIds: DEFAULT_ENTER_STOP_COL_IDS,
 }
 
 export function resolveOrderScreenSpec(key: string | undefined): OrderScreenSpec {

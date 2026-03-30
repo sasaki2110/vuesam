@@ -5,6 +5,7 @@ import ProductCodeCellEditor from '@/components/grid/ProductCodeCellEditor.vue'
 export const GRID_FIELD_TYPES = [
   'codeAutocomplete',
   'numeric',
+  'text',
   'readOnlyText',
   'readOnlyComputed',
 ] as const
@@ -22,6 +23,7 @@ export type ReadOnlyComputedFieldParams<TData = unknown> = {
 export type GridFieldResolveInput<TData = unknown> =
   | { fieldType: 'codeAutocomplete'; params: CodeAutocompleteFieldParams }
   | { fieldType: 'numeric' }
+  | { fieldType: 'text' }
   | { fieldType: 'readOnlyText' }
   | { fieldType: 'readOnlyComputed'; params: ReadOnlyComputedFieldParams<TData> }
 
@@ -56,6 +58,11 @@ export function resolveGridFieldTypePartial<TData>(
         singleClickEdit: true,
         type: 'numericColumn',
         valueParser: (p) => parseNumericCellValue(p.newValue),
+      }
+    case 'text':
+      return {
+        editable: true,
+        singleClickEdit: true,
       }
     case 'readOnlyText':
       return {

@@ -71,6 +71,21 @@ function onInput() {
   highlighted.value = 0
 }
 
+/** フォーカスイン（キャプチャ）で開く: @focus だけだと他要素へのフォーカス移動と競合しやすい */
+function onWrapFocusInCapture() {
+  open.value = true
+}
+
+function onInputPointerDown() {
+  open.value = true
+}
+
+function onLabelMouseDown(e: MouseEvent) {
+  e.preventDefault()
+  open.value = true
+  inputRef.value?.focus()
+}
+
 function onBlur() {
   setTimeout(() => {
     open.value = false
@@ -134,8 +149,8 @@ defineExpose({
 </script>
 
 <template>
-  <div class="mc-wrap">
-    <label class="mc-label">{{ label }}</label>
+  <div class="mc-wrap" @focusin.capture="onWrapFocusInCapture">
+    <label class="mc-label" @mousedown="onLabelMouseDown">{{ label }}</label>
     <div class="mc-field">
       <input
         ref="inputRef"
@@ -147,6 +162,7 @@ defineExpose({
         autocomplete="off"
         :aria-expanded="open && filtered.length > 0 ? 'true' : 'false'"
         aria-haspopup="listbox"
+        @pointerdown="onInputPointerDown"
         @input="onInput"
         @focus="open = true"
         @blur="onBlur"

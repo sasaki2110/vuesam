@@ -77,6 +77,22 @@ async function runLoginAndGoOrdersAlt(username: string, password: string) {
     smokeBusy.value = false
   }
 }
+
+async function runLoginAndGoPurchase(username: string, password: string) {
+  smokeError.value = ''
+  smokeLog.value = ''
+  smokeBusy.value = true
+  try {
+    const { accessToken } = await login(username, password)
+    sessionStorage.setItem('accessToken', accessToken)
+    logLine('login OK, go to /purchase/new')
+    await router.push('/purchase/new')
+  } catch (e) {
+    smokeError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    smokeBusy.value = false
+  }
+}
 </script>
 
 <template>
@@ -85,6 +101,7 @@ async function runLoginAndGoOrdersAlt(username: string, password: string) {
     <div class="entry-links">
       <RouterLink to="/orders/new" class="cta">受注登録画面へ</RouterLink>
       <RouterLink to="/orders/new-alt" class="cta cta-sub">受注登録画面（横展開サンプル）へ</RouterLink>
+      <RouterLink to="/purchase/new" class="cta cta-sub">発注登録（デモ・共有エンジン）へ</RouterLink>
     </div>
 
     <details class="dev-smoke">
@@ -120,6 +137,14 @@ async function runLoginAndGoOrdersAlt(username: string, password: string) {
           @click="runLoginAndGoOrdersAlt('demo', 'password')"
         >
           ログイン → 横展開サンプル画面へ
+        </button>
+        <button
+          type="button"
+          class="dev-btn"
+          :disabled="smokeBusy"
+          @click="runLoginAndGoPurchase('demo', 'password')"
+        >
+          ログイン → 発注デモ画面へ
         </button>
       </div>
       <p v-if="smokeError" class="dev-err">{{ smokeError }}</p>
