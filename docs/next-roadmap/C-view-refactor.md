@@ -8,7 +8,7 @@
 
 ## 現状の問題
 
-`ScreenWorkspaceView.vue` の現状（約 300 行のスクリプト + テンプレート）：
+`ScreenWorkspaceView.vue` の現状（約 628 行: スクリプト 340 行 + テンプレート 114 行 + CSS 170 行）：
 
 | 問題 | 具体例 |
 |------|--------|
@@ -72,7 +72,7 @@
 1. **レイアウト**（ヘッダバー、ヘッダカード、グリッドカード、aside）
 2. **ScreenHeaderField の v-for 描画**（props の `spec.headerFields` を使用）
 3. **AgGridVue の描画**（props の `columnDefs`, `rowData` 等を使用）
-4. **F キー基盤**（`useKeySpec` を呼び、`onNew` / `onSave` を接続）
+4. **F キー基盤**（`useKeySpec` を呼び、`onNew` / `onSave` を emits で親に委譲。`mockAlert` 等の画面固有アクションも emits 経由で親から受け取る。または `useKeySpec` 自体をラッパーに移動し、シェルは F キー基盤を持たない設計も選択可能 — 後述の設計判断を参照）
 5. **ヘッダ Enter ナビゲーション**（`useHeaderEnterNav`）
 6. **スタイル**（CSS は現在のものをそのまま移植）
 
@@ -164,9 +164,12 @@ export type RegistrationShellEmits = {
 - `orderHeader` / `purchaseHeader` — 画面固有
 - `orderRowData` / `purchaseRowData` — 画面固有
 - `gridApiOrder` / `gridApiPurchase` — 画面固有
-- `orderNav` / `purchaseNav`（`useGridEnterNav`）— 画面固有
-- `handleSave` の中身 — 画面固有
+- `orderNav` / `purchaseNav`（`useGridEnterNav`）— 画面固有（戻り値の `onCellEditingStopped` / `suppressEnterWhileEditing` もラッパーが管理）
+- `handleNew` / `handleSave` の中身 — 画面固有
 - `onOrderCellValueChanged` / `onPurchaseCellValueChanged` — 画面固有
+- `onDateFieldFocus` / `formatJstCalendarDatePlusDays` — 画面固有（header store の参照先が画面ごとに異なるため）
+- `snapshotOrderRowsFromGrid` / `snapshotPurchaseRowsFromGrid` — 画面固有（`handleSave` 内で使用）
+- `onMockF8`（受注の F8 モック）— 画面固有のキーアクションハンドラ
 - 列定義の computed — 画面固有
 - マスタ API の fetch — 画面固有
 
@@ -185,14 +188,18 @@ export type RegistrationShellEmits = {
 受注固有のロジックをラッパーに集約する。
 
 **持つもの**:
-- `ORDER_NEW_SPEC`（または `resolveOrderScreenSpec`）の import
+- `resolveOrderScreenSpec` で Spec を解決（`route.meta.variant === 'alt'` なら `ORDER_NEW_ALT_SPEC`。既存の `resolveOrderScreenSpec` をそのまま利用可能）
 - `orderHeader` の `reactive`
 - `orderRowData` の `ref`
 - `gridApiOrder` の `shallowRef`
-- `useGridEnterNav` の呼び出し（受注用）
+- `useGridEnterNav` の呼び出し（受注用）— 戻り値の `onCellEditingStopped` / `suppressEnterWhileEditing` を保持
+- `defaultColDef` の `computed`（`suppressEnterWhileEditing` を含める）
 - `fetchParties` / `fetchProducts` の `onMounted`
 - `handleNew` / `handleSave` の実装（現在の `ScreenWorkspaceView.vue` から移植）
+- `snapshotOrderRowsFromGrid` — `handleSave` で使用する行データ取得ユーティリティ
 - `onOrderCellValueChanged` の実装
+- `onDateFieldFocus` / `formatJstCalendarDatePlusDays` — 日付フィールドの初期値設定
+- `onMockF8`（F8 キーアクションのハンドラ）
 - `orderColumnDefs` の `computed`
 
 **テンプレート**:
@@ -236,9 +243,23 @@ export type RegistrationShellEmits = {
 
 発注固有のロジックをラッパーに集約する。構造は `OrderNewPage.vue` と同じ。
 
+**持つもの**:
+- `PURCHASE_NEW_SPEC` の import
+- `purchaseHeader` の `reactive`
+- `purchaseRowData` の `ref`
+- `gridApiPurchase` の `shallowRef`
+- `useGridEnterNav` の呼び出し（発注用）— 戻り値の `onCellEditingStopped` / `suppressEnterWhileEditing` を保持
+- `defaultColDef` の `computed`（`suppressEnterWhileEditing` を含める）
+- `fetchParties` の `onMounted`（発注は `fetchProducts` 不要）
+- `handleNew` / `handleSave` の実装（現在の else ブロックから移植、`snapshotPurchaseRowsFromGrid` を含む）
+- `onPurchaseCellValueChanged` の実装
+- `onDateFieldFocus` / `formatJstCalendarDatePlusDays`（発注にも日付フィールドがある場合。現状の `PURCHASE_NEW_SPEC` には日付フィールドがないが、シグネチャだけ残しておけば将来追加時に対応可能）
+- `purchaseColumnDefs` の `computed`
+
 **完了基準**:
 - [ ] `PurchaseNewPage.vue` が作成されている
 - [ ] 発注固有のロジックがすべてここに集約されている
+- [ ] `RegistrationScreenShell` を使って描画している
 
 ---
 
@@ -259,7 +280,7 @@ import PurchaseNewPage from '@/views/PurchaseNewPage.vue'
 { path: '/purchase/new', name: 'purchase-new', component: PurchaseNewPage, meta: { requiresAuth: true } },
 ```
 
-> **注意**: `order-new-alt` は `OrderNewPage` 内で `route.meta.variant` を見て Spec を切り替える。
+> **注意**: `order-new-alt` は `OrderNewPage` 内で `route.meta.variant` を見て、既存の `resolveOrderScreenSpec` に渡すキーを切り替える（`variant === 'alt'` なら `'order-new-alt'` を渡す）。`resolveOrderScreenSpec` は `orderNewSpec.ts` に既に存在するためそのまま利用できる。
 
 **完了基準**:
 - [ ] ルーティングがラッパーコンポーネントを直接指している
@@ -294,8 +315,11 @@ import PurchaseNewPage from '@/views/PurchaseNewPage.vue'
 - ただし、一覧画面（B）で「画面 ID → Spec」の解決が必要になる場合は残す
 
 **判断**:
-- B を同時進行する場合 → `resolveScreenBundle` を拡張して `ListScreenSpec` も含める
-- B がまだの場合 → 使われなくなった `resolveScreenBundle` を整理（削除 or 将来用にコメント）
+
+B（一覧画面）は既に完了しており、一覧画面は `listScreenSpecRegistry.ts` で独立して Spec を解決している。分割後は登録画面のラッパーが直接 Spec を import するため、`resolveScreenBundle` と `ScreenBundle` 型は**不要**になる。
+
+- `screenSpecRegistry.ts` を**削除する**（推奨）
+- どこからも import されていないことを `npm run build` で確認する
 
 **完了基準**:
 - [ ] 不要になったコードが整理されている
@@ -322,7 +346,7 @@ import PurchaseNewPage from '@/views/PurchaseNewPage.vue'
 
 | ファイル | 役割 |
 |---|---|
-| `src/views/ScreenWorkspaceView.vue` | 分割対象（約 300 行） |
+| `src/views/ScreenWorkspaceView.vue` | 分割対象（約 628 行） |
 | `src/features/screen-engine/screenSpecRegistry.ts` | 登録の見直し対象 |
 | `src/features/screen-engine/useGridEnterNav.ts` | ラッパーに移動する composable |
 | `src/features/screen-engine/useHeaderEnterNav.ts` | シェルに残る composable |
@@ -339,3 +363,4 @@ import PurchaseNewPage from '@/views/PurchaseNewPage.vue'
 | `order-new-alt` のバリアント切替 | ラッパー内で `route.meta.variant` を見て Spec を切り替える。シェルは関与しない |
 | aside パネルの画面固有化 | 現時点ではダミーなのでシェルに固定。将来画面固有にする場合は slot で対応 |
 | `useGridEnterNav` の `suppressEnterWhileEditing` が `defaultColDef` に渡される仕組み | ラッパーが `defaultColDef` を computed で組み立て、シェルに渡す |
+| `useKeySpec` の配置 | 現在は `new` / `save` / `mockAlert` の 3 アクションを一括登録しているが、`mockAlert` は受注固有。**案 A**: シェルに `useKeySpec` を置き、画面固有アクションは emits 経由（シェルの emits が増える）。**案 B**: `useKeySpec` をラッパーに移動（シェルは F キーに関与しない。ラッパーが `handleNew` / `handleSave` / `onMockF8` を直接渡す。シンプルだが各ラッパーに `useKeySpec` 呼び出しが重複する）。推奨は**案 B**。`useKeySpec` は 1 行の composable 呼び出しなので重複コストは低く、画面固有アクションの拡張が容易 |
