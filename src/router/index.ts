@@ -2,7 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
 import ListScreenView from '@/views/ListScreenView.vue'
 import OrderEditPlaceholderView from '@/views/OrderEditPlaceholderView.vue'
-import ScreenWorkspaceView from '@/views/ScreenWorkspaceView.vue'
+import OrderNewPage from '@/views/OrderNewPage.vue'
+import PurchaseNewPage from '@/views/PurchaseNewPage.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -27,20 +28,20 @@ const router = createRouter({
     {
       path: '/orders/new',
       name: 'order-new',
-      component: ScreenWorkspaceView,
-      meta: { requiresAuth: true, screenSpecId: 'order-new' },
+      component: OrderNewPage,
+      meta: { requiresAuth: true },
     },
     {
       path: '/orders/new-alt',
       name: 'order-new-alt',
-      component: ScreenWorkspaceView,
-      meta: { requiresAuth: true, screenSpecId: 'order-new-alt' },
+      component: OrderNewPage,
+      meta: { requiresAuth: true, variant: 'alt' },
     },
     {
       path: '/purchase/new',
       name: 'purchase-new',
-      component: ScreenWorkspaceView,
-      meta: { requiresAuth: true, screenSpecId: 'purchase-new' },
+      component: PurchaseNewPage,
+      meta: { requiresAuth: true },
     },
   ],
 })
