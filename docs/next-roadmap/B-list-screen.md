@@ -56,7 +56,14 @@ export type ListScreenSpec = {
   searchAction: {
     apiPath: string // 例: '/api/orders' → GET /api/orders?key=value
   }
-  navigationSpec: NavigationSpec
+  /**
+   * 検索条件フィールド ID → API クエリパラメータ名のマッピング。
+   * 例: { contractParty: 'contractPartyCode' }
+   * 未定義のフィールドはフィールド ID をそのままパラメータ名として使用する。
+   */
+  searchParamMapping?: Record<string, string>
+  /** 検索条件の Enter 移動順（登録画面の NavigationSpec.headerEnterOrder に相当） */
+  searchFieldEnterOrder: readonly string[]
   keySpec: KeySpec
 }
 
@@ -69,24 +76,43 @@ export type ListResultColumn = {
 }
 ```
 
+> **設計判断: `NavigationSpec` を流用しない理由**
+>
+> 登録画面の `NavigationSpec` には `gridEditChainColIds` / `gridEnterStopEditingColIds` / `gridEntryColumnField` が含まれるが、一覧画面のグリッドは読み取り専用のため、これらは無意味。空配列を入れて流用するよりも、一覧画面に必要な `searchFieldEnterOrder` だけを独立して持つほうが型として明確。
+
+> **設計判断: `KeyActionId` の拡張**
+>
+> 一覧画面では「検索実行」「検索条件クリア」のキーバインドが必要。現在の `KeyActionId`（`'new' | 'save' | 'mockAlert'`）にはこれらがない。ステップ 1 で `KeyActionId` に `'search'` と `'clearSearch'` を追加する。`useKeySpec` はアクション ID → ハンドラの汎用マッピングなので、ID を追加するだけで一覧画面でもそのまま使える。
+
 ---
 
 ## 作業手順
 
-### ステップ 1: 一覧画面用の Spec 型を定義
+### ステップ 1: 一覧画面用の Spec 型と `KeyActionId` の拡張
 
 **対象**: `src/features/screen-engine/screenSpecTypes.ts`
 
-上記の `ListScreenSpec` と `ListResultColumn` を追加する。
+上記の `ListScreenSpec` と `ListResultColumn` を追加する。同時に `KeyActionId` を拡張する。
+
+```typescript
+// 変更前
+export type KeyActionId = 'new' | 'save' | 'mockAlert'
+
+// 変更後
+export type KeyActionId = 'new' | 'save' | 'mockAlert' | 'search' | 'clearSearch'
+```
 
 **ポイント**:
 - 検索条件の `searchFields` は既存の `HeaderFieldSpec` をそのまま流用する
 - `resultColumns` は読み取り専用なので、`editable` / `fieldType` は不要。表示フォーマットだけ持つ
 - `rowNavigation` と `deleteAction` は一覧画面固有の操作を宣言する
+- `NavigationSpec` は流用しない（上記の設計判断を参照）
+- `KeyActionId` に `'search'` と `'clearSearch'` を追加する
 
 **完了基準**:
 - [ ] `ListScreenSpec` 型が `screenSpecTypes.ts` にエクスポートされている
 - [ ] `ListResultColumn` 型が `screenSpecTypes.ts` にエクスポートされている
+- [ ] `KeyActionId` に `'search'` と `'clearSearch'` が含まれている
 - [ ] `npm run build` が成功する
 
 ---
@@ -121,10 +147,14 @@ export type ListResultColumn = {
 
 - `ListScreenSpec` を props（または `resolveListScreenBundle()` で取得）として受け取る
 - 検索条件は `ScreenHeaderField` を `v-for` で描画（登録画面と同じ仕組み）
-- AG Grid は `readOnly` モード（`:editable="false"` / `:single-click-edit="false"`）
-- 行選択は `rowSelection: 'multiple'`（チェックボックス付き）
-- 行ダブルクリック → `router.push` で変更画面に遷移
-- 削除ボタン → 選択行の ID を取得 → 確認ダイアログ → DELETE API
+- AG Grid は `readOnly` モード（列定義に `editable` を設定しない＝デフォルトで読み取り専用）
+- 行選択は **AG Grid v35 のオブジェクト形式** で設定する:
+  ```typescript
+  :rowSelection="{ mode: 'multiRow' }"
+  ```
+  > **注意**: AG Grid v35 では旧形式の `rowSelection="multiple"` は非推奨。必ずオブジェクト形式 `{ mode: 'multiRow' }` を使用する。チェックボックスはデフォルトで表示される。
+- 行ダブルクリック → `@row-double-clicked` イベントで `router.push` して変更画面に遷移
+- 削除ボタン → `api.getSelectedRows()` で選択行を取得 → 確認ダイアログ → DELETE API
 
 **完了基準**:
 - [ ] `ListScreenView.vue` が作成されている
@@ -188,17 +218,18 @@ export const ORDER_LIST_SPEC: ListScreenSpec = {
   searchAction: {
     apiPath: '/api/orders',
   },
-  navigationSpec: {
-    headerEnterOrder: ['orderNumber', 'contractParty', 'dueDateFrom', 'dueDateTo'],
-    gridEntryColumnField: 'orderNumber',
-    gridEditChainColIds: [],
-    gridEnterStopEditingColIds: [],
+  searchParamMapping: {
+    contractParty: 'contractPartyCode',  // Spec の id → API のクエリパラメータ名
   },
+  searchFieldEnterOrder: ['orderNumber', 'contractParty', 'dueDateFrom', 'dueDateTo'],
   keySpec: {
-    // F1 で検索条件クリア、F12 で検索実行（一覧画面用のキーバインド）
+    F1: 'clearSearch',   // 検索条件クリア
+    F12: 'search',       // 検索実行
   },
 }
 ```
+
+> **`searchParamMapping` の説明**: 検索条件のフィールド ID（`contractParty`）と API のクエリパラメータ名（`contractPartyCode`）が異なる。`searchParamMapping` で変換を宣言する。`masterCombobox` の場合は値が `{ code, name }` オブジェクトなので、検索実行時に `.code` を取り出す処理も `ListScreenView` 側で必要。マッピングに含まれないフィールド（`orderNumber` 等）はフィールド ID をそのままパラメータ名として使用する。
 
 **完了基準**:
 - [ ] `orderListSpec.ts` が作成されている
@@ -212,6 +243,8 @@ export const ORDER_LIST_SPEC: ListScreenSpec = {
 **対象**: Spring Boot バックエンド
 
 #### GET /api/orders — 受注一覧取得
+
+> **注意**: 既存の `POST /api/orders`（受注新規登録）と同じパス。HTTP メソッドが異なるので REST としては正しい。Spring Boot 側では同一の `OrderController` に `@GetMapping` と `@PostMapping` を並べる形になる。
 
 **リクエスト**: クエリパラメータで検索条件を受け取る。
 
@@ -418,6 +451,24 @@ export async function deleteOrder(id: number): Promise<void> {
 
 ---
 
+## AG Grid の仕様メモ（実装時に参照）
+
+本ドキュメントは AG Grid v35.2.0 を前提としている。
+
+| 機能 | v35 での API | 備考 |
+|------|-------------|------|
+| 複数行選択 | `:rowSelection="{ mode: 'multiRow' }"` | 旧 `rowSelection="multiple"` は非推奨 |
+| チェックボックス表示 | `{ mode: 'multiRow' }` でデフォルト表示 | 非表示にする場合は `checkboxes: false` |
+| ダブルクリックイベント | `@row-double-clicked` | `event.data` で行データにアクセス |
+| 選択行の取得 | `api.getSelectedRows()` | 削除時に使用 |
+| 読み取り専用 | 列定義に `editable` を設定しない | デフォルトで読み取り専用 |
+
+公式リファレンス:
+- 行選択: https://www.ag-grid.com/vue-data-grid/row-selection-multi-row/
+- 行イベント: https://www.ag-grid.com/vue-data-grid/row-events/
+
+---
+
 ## リスクと判断ポイント
 
 | リスク | 対策 |
@@ -425,3 +476,5 @@ export async function deleteOrder(id: number): Promise<void> {
 | 変更画面（受注編集）がまだない | 一覧画面のダブルクリック遷移先は `order-edit` ルートとして定義しておき、変更画面は後で実装する |
 | 検索条件が複雑になる | H2 開発段階では全件取得 + フロント絞り込みでもよい。バックエンド検索は段階的に充実させる |
 | ページネーションが必要になる | H2 では全件取得で十分。件数が増えたら `limit` / `offset` パラメータを追加する |
+| `GET /api/orders` と `POST /api/orders` が同パス | REST としては正常。Spring Boot の `OrderController` に `@GetMapping` と `@PostMapping` を並べるだけで問題ない |
+| 検索フィールド ID と API パラメータ名の不一致 | `searchParamMapping` で宣言的に変換する。`masterCombobox` は値が `{ code, name }` なので `.code` の取り出しも必要 |
