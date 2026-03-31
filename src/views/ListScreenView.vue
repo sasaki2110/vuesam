@@ -8,6 +8,7 @@ import {
   type GridReadyEvent,
   type RowDoubleClickedEvent,
   type RowSelectionOptions,
+  type SpanRowsParams,
 } from 'ag-grid-community'
 import { computed, nextTick, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -183,13 +184,33 @@ function formatCellValue(v: unknown, format?: ListResultColumn['format']): strin
   return v == null ? '' : String(v)
 }
 
+function spanRowsByGroupField(field: string) {
+  return (p: SpanRowsParams<Record<string, unknown>, unknown>): boolean => {
+    const a = p.nodeA?.data?.[field]
+    const b = p.nodeB?.data?.[field]
+    return a != null && a === b
+  }
+}
+
 const columnDefs = computed((): ColDef<Record<string, unknown>>[] => {
-  return spec.value.resultColumns.map((c) => ({
-    field: c.field,
-    headerName: c.headerName,
-    width: c.width,
-    valueFormatter: (p) => formatCellValue(p.value, c.format),
-  }))
+  const groupField = spec.value.spanRowsGroupField
+  const spanByGroup = groupField ? spanRowsByGroupField(groupField) : null
+  return spec.value.resultColumns.map((c) => {
+    const def: ColDef<Record<string, unknown>> = {
+      field: c.field,
+      headerName: c.headerName,
+      width: c.width,
+      valueFormatter: (p) => formatCellValue(p.value, c.format),
+    }
+    if (c.spanRows) {
+      def.spanRows = spanByGroup ?? true
+    }
+    if (c.align === 'right') {
+      def.cellClass = 'ag-right-aligned-cell'
+      def.headerClass = 'ag-right-aligned-header'
+    }
+    return def
+  })
 })
 
 const defaultColDef = computed(
@@ -368,6 +389,7 @@ onMounted(() => {
               :popup-parent="popupParentEl"
               :column-defs="columnDefs"
               :default-col-def="defaultColDef"
+              :enable-cell-span="true"
               :get-row-id="(p: { data: Record<string, unknown> }) => String(p.data[rowIdField] ?? '')"
               :row-selection="rowSelection"
               :enter-navigates-vertically="false"

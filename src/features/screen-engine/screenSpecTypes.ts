@@ -30,6 +30,10 @@ export type ListResultColumn = {
   headerName: string
   width?: number
   format?: 'date' | 'number' | 'text'
+  /** true: 連続する同一値のセルを結合（AG Grid Row Spanning / enableCellSpan 必須） */
+  spanRows?: boolean
+  /** セル・ヘッダの横位置。`right` は AG Grid の右詰めクラスを付与 */
+  align?: 'left' | 'right' | 'center'
 }
 
 export type ListScreenSpec = {
@@ -61,6 +65,11 @@ export type ListScreenSpec = {
    * ツールバーに「明細 N 行 · 受注 M 件」と出すときの M の重複排除キー（例: 受注ヘッダ id）。
    */
   toolbarOrderDistinctField?: string
+  /**
+   * `spanRows: true` の列で、**隣接行のこのフィールドが同じ**ときだけ縦結合する（例: 受注ヘッダ `id`）。
+   * 未指定時は AG Grid 既定（セル値の一致）のみ。
+   */
+  spanRowsGroupField?: string
 }
 
 export type FunctionKey =

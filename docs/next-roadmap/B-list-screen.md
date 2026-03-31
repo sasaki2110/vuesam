@@ -378,7 +378,7 @@ export async function deleteOrder(id: number): Promise<void> {
 
 ### ステップ 7: 画面定義 Markdown の書き方を拡張
 
-**対象**: `docs/screen-engine-roadmap/phase4.md`
+**対象**: `docs/archive/screen-engine-roadmap/phase4.md`
 
 一覧画面テンプレートを追加する。
 
@@ -413,7 +413,7 @@ export async function deleteOrder(id: number): Promise<void> {
 ```
 
 **完了基準**:
-- [ ] `phase4.md` に一覧画面テンプレートが追加されている
+- [ ] `docs/archive/screen-engine-roadmap/phase4.md` に一覧画面テンプレートが追加されている
 
 ---
 
