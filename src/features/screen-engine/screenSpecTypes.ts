@@ -52,6 +52,15 @@ export type ListScreenSpec = {
   searchParamMapping?: Record<string, string>
   searchFieldEnterOrder: readonly string[]
   keySpec: KeySpec
+  /**
+   * グリッド行の一意キー（1受注が複数行になるときは明細 ID など）。
+   * 未指定時は deleteAction.idField → rowNavigation.paramField の順で使う。
+   */
+  listRowIdField?: string
+  /**
+   * ツールバーに「明細 N 行 · 受注 M 件」と出すときの M の重複排除キー（例: 受注ヘッダ id）。
+   */
+  toolbarOrderDistinctField?: string
 }
 
 export type FunctionKey =

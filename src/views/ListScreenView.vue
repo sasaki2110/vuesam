@@ -201,7 +201,31 @@ const defaultColDef = computed(
   }),
 )
 
-const rowIdField = computed(() => spec.value.deleteAction?.idField ?? spec.value.rowNavigation.paramField)
+const rowIdField = computed(
+  () =>
+    spec.value.listRowIdField ??
+    spec.value.deleteAction?.idField ??
+    spec.value.rowNavigation.paramField,
+)
+
+function countDistinctField(rows: readonly Record<string, unknown>[], field: string): number {
+  const seen = new Set<string>()
+  for (const r of rows) {
+    const v = r[field]
+    if (v == null || v === '') continue
+    seen.add(typeof v === 'number' ? String(v) : String(v))
+  }
+  return seen.size
+}
+
+const toolbarSummaryText = computed(() => {
+  if (loading.value) return '読み込み中…'
+  const n = rowData.value.length
+  const distinctKey = spec.value.toolbarOrderDistinctField
+  if (!distinctKey) return `${n} 件`
+  const orders = countDistinctField(rowData.value, distinctKey)
+  return `明細 ${n} 行 · 受注 ${orders} 件`
+})
 
 const rowSelection = computed(
   (): RowSelectionOptions<Record<string, unknown>> => ({
@@ -230,13 +254,14 @@ async function handleDelete() {
   }
   if (!confirm(del.confirmMessage)) return
   const idField = del.idField
-  const ids: number[] = []
+  const orderIds = new Set<number>()
   for (const row of rows) {
     const raw = row[idField]
     const id = typeof raw === 'number' ? raw : Number(raw)
     if (!Number.isFinite(id)) continue
-    ids.push(id)
+    orderIds.add(id)
   }
+  const ids = [...orderIds]
   if (ids.length === 0) {
     alert('有効な ID が取得できませんでした。')
     return
@@ -330,7 +355,7 @@ onMounted(() => {
             >
               削除
             </button>
-            <span class="count">{{ loading ? '読み込み中…' : `${rowData.length} 件` }}</span>
+            <span class="count">{{ toolbarSummaryText }}</span>
           </div>
         </section>
 

@@ -14,25 +14,34 @@
 
 ## 結果一覧
 
+`GET /api/orders` は **1要素＝明細1行**（ヘッダ項目は同一受注で繰り返し）。ツールバーは **明細行数** と **受注 ID のユニーク件数** を表示する。
+
 | 列名 | 表示形式 | 備考 |
 |------|---------|------|
 | 受注番号 | テキスト | |
-| 契約先 | テキスト | 名称表示 |
-| 納入先 | テキスト | 名称表示 |
-| 納期 | 日付 | |
-| 金額合計 | 数値（カンマ区切り） | |
+| 行 | 数値 | `lineNo` |
+| 製品コード | テキスト | |
+| 製品名 | テキスト | null のとき空表示 |
+| 数量 | 数値 | |
+| 単価 | 数値 | |
+| 明細金額 | 数値 | `amount` |
+| 契約先 | テキスト | 名称（null 可） |
+| 納入先 | テキスト | 名称（null 可） |
+| 納期 | 日付 | null 可 |
+| 受注合計 | 数値 | `totalAmount`（行ごと同じ） |
+| 明細行数 | 数値 | `lineCount`（行ごと同じ） |
 | 登録日時 | 日付／日時 | ISO 文字列は日時表示 |
 
 ## 行操作
 
-- ダブルクリック → 受注編集（ルート `order-edit`、`/orders/:id/edit`・現状はプレースホルダ）
-- 削除 → 行選択後に確認 → `DELETE /api/orders/{id}`（複数選択時は順次削除）
+- ダブルクリック → 受注編集（ルート `order-edit`、`/orders/:id/edit`・現状はプレースホルダ）。パラメータは受注ヘッダの `id`
+- 削除 → 行選択後に確認 → `DELETE /api/orders/{id}`（**受注 ID** で削除。同一受注の複数明細行を選んでも API は受注単位で 1 回ずつ）
 
 ## 検索 API
 
 | アクション | API | パラメータ概要 | レスポンス概要 |
 |-----------|-----|--------------|--------------|
-| 検索 | GET /api/orders | `orderNumber`, `contractPartyCode`, `dueDateFrom`, `dueDateTo`（すべて任意） | 受注一覧の JSON 配列 |
+| 検索 | GET /api/orders | `orderNumber`, `contractPartyCode`, `dueDateFrom`, `dueDateTo`（すべて任意） | 明細フラットの JSON 配列（型は `OrderListItem`） |
 
 ## F キー
 
@@ -43,3 +52,4 @@
 
 - Spec の `searchParamMapping` で `contractParty` → `contractPartyCode` に変換する
 - `masterCombobox` の値は `{ code, name }` のため、検索時は `.code` をクエリに載せる
+- グリッドの行 ID は `listRowIdField: lineId`（明細行単位で一意）

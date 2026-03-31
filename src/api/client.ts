@@ -93,19 +93,27 @@ export async function createOrder(body: OrderCreateRequest): Promise<OrderCreate
   return (await res.json()) as OrderCreateResponse
 }
 
+/** GET /api/orders: 1要素＝明細1行（ヘッダ項目は同一受注で繰り返し） */
 export type OrderListItem = {
   id: number
   orderNumber: string
   contractPartyCode: string
-  contractPartyName: string
+  contractPartyName: string | null
   deliveryPartyCode: string
-  deliveryPartyName: string
-  deliveryLocation: string
-  dueDate: string
-  forecastNumber: string
+  deliveryPartyName: string | null
+  deliveryLocation: string | null
+  dueDate: string | null
+  forecastNumber: string | null
   totalAmount: number
   lineCount: number
   createdAt: string
+  lineId: number
+  lineNo: number
+  productCode: string
+  productName: string | null
+  quantity: number
+  unitPrice: number
+  amount: number
 }
 
 export type OrderSearchParams = {
