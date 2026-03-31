@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
+import ListScreenView from '@/views/ListScreenView.vue'
+import OrderEditPlaceholderView from '@/views/OrderEditPlaceholderView.vue'
 import ScreenWorkspaceView from '@/views/ScreenWorkspaceView.vue'
 
 const router = createRouter({
@@ -9,6 +11,18 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomeView,
+    },
+    {
+      path: '/orders',
+      name: 'order-list',
+      component: ListScreenView,
+      meta: { requiresAuth: true, screenSpecId: 'order-list' },
+    },
+    {
+      path: '/orders/:id/edit',
+      name: 'order-edit',
+      component: OrderEditPlaceholderView,
+      meta: { requiresAuth: true },
     },
     {
       path: '/orders/new',

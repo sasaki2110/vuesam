@@ -23,7 +23,36 @@ export type NavigationSpec = {
   gridEnterStopEditingColIds: readonly string[]
 }
 
-export type KeyActionId = 'new' | 'save' | 'mockAlert'
+export type KeyActionId = 'new' | 'save' | 'mockAlert' | 'search' | 'clearSearch'
+
+export type ListResultColumn = {
+  field: string
+  headerName: string
+  width?: number
+  format?: 'date' | 'number' | 'text'
+}
+
+export type ListScreenSpec = {
+  id: string
+  title: string
+  searchFields: HeaderFieldSpec[]
+  resultColumns: ListResultColumn[]
+  rowNavigation: {
+    routeName: string
+    paramField: string
+  }
+  deleteAction: {
+    apiPath: string
+    idField: string
+    confirmMessage: string
+  } | null
+  searchAction: {
+    apiPath: string
+  }
+  searchParamMapping?: Record<string, string>
+  searchFieldEnterOrder: readonly string[]
+  keySpec: KeySpec
+}
 
 export type FunctionKey =
   | 'F1'
