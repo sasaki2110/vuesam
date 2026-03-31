@@ -116,41 +116,25 @@ export type HeaderFieldSpec = {
 
 **対象**: 新規ファイル `src/features/screen-engine/validation/validateFields.ts`
 
+`executeRule` はステップ 4（グリッドバリデーション）でも使うため **エクスポート** する。
+
 ```typescript
 import type { HeaderFieldSpec } from '../screenSpecTypes'
 import type { FieldError, ValidationResult, ValidationRule } from './validationTypes'
 
 /**
- * ヘッダフィールドの値をバリデーションし、エラーの配列を返す。
+ * 1 つのルールを値に適用し、エラーメッセージまたは null を返す。
+ * ヘッダ・グリッド両方から利用するためエクスポートする。
  */
-export function validateHeaderFields(
-  fields: readonly HeaderFieldSpec[],
-  values: Record<string, unknown>,
-): ValidationResult {
-  const errors: FieldError[] = []
-
-  for (const field of fields) {
-    if (!field.validation) continue
-    const value = values[field.id]
-    for (const rule of field.validation) {
-      const message = executeRule(rule, value, field.label)
-      if (message) {
-        errors.push({ fieldKey: field.id, message })
-        break // 1フィールドにつき最初のエラーだけ
-      }
-    }
-  }
-
-  return { valid: errors.length === 0, errors }
-}
-
-function executeRule(
+export function executeRule(
   rule: ValidationRule,
   value: unknown,
   label: string,
 ): string | null {
   switch (rule.type) {
     case 'required': {
+      // masterCombobox の値は { code, name } | null。
+      // code が空文字の場合も「未選択」として扱う。
       const empty = value == null
         || (typeof value === 'string' && value.trim() === '')
         || (typeof value === 'object' && value !== null && 'code' in value && !(value as { code?: string }).code)
@@ -178,20 +162,50 @@ function executeRule(
       return rule.validate(value)
   }
 }
+
+/**
+ * ヘッダフィールドの値をバリデーションし、エラーの配列を返す。
+ */
+export function validateHeaderFields(
+  fields: readonly HeaderFieldSpec[],
+  values: Record<string, unknown>,
+): ValidationResult {
+  const errors: FieldError[] = []
+
+  for (const field of fields) {
+    if (!field.validation) continue
+    const value = values[field.id]
+    for (const rule of field.validation) {
+      const message = executeRule(rule, value, field.label)
+      if (message) {
+        errors.push({ fieldKey: field.id, message })
+        break // 1フィールドにつき最初のエラーだけ
+      }
+    }
+  }
+
+  return { valid: errors.length === 0, errors }
+}
 ```
 
 **完了基準**:
-- [ ] `validateHeaderFields` がエクスポートされている
+- [ ] `executeRule` と `validateHeaderFields` がエクスポートされている
 - [ ] 各ルールタイプ（`required`, `minLength`, `maxLength`, `pattern`, `custom`）が実装されている
+- [ ] `required` は `CodeMasterItem | null`（masterCombobox の値）にも対応している
 - [ ] `npm run build` が成功する
 
 ---
 
 ### ステップ 4: 明細グリッドのバリデーション関数を作成
 
-**対象**: `src/features/screen-engine/validation/validateGridRows.ts`
+**対象**: 新規ファイル `src/features/screen-engine/validation/validateGridRows.ts`
+
+ステップ 3 でエクスポートした `executeRule` をインポートして使う。
 
 ```typescript
+import type { FieldError, ValidationResult, ValidationRule } from './validationTypes'
+import { executeRule } from './validateFields'
+
 export type GridColumnValidation = {
   colId: string
   label: string
@@ -229,6 +243,7 @@ export function validateGridRows(
 
 **完了基準**:
 - [ ] `validateGridRows` がエクスポートされている
+- [ ] `executeRule` を `validateFields.ts` からインポートしている
 - [ ] 空行がスキップされる
 - [ ] `fieldKey` が `rowIndex:colId` 形式で出力される
 
@@ -266,11 +281,43 @@ export const ORDER_HEADER_FIELDS: HeaderFieldSpec[] = [
 
 ---
 
+### ステップ 5b: マークダウン仕様書にバリデーション列を追加
+
+**対象**: `docs/screen-specs/order-new.md`, `docs/screen-specs/purchase-new.md`
+
+TypeScript Spec にバリデーションルールを追加するのと同じタイミングで、マークダウン仕様書にも反映する。
+後回しにすると抜け漏れが起きやすいため、Spec 変更と同時に実施する。
+
+**`order-new.md` ヘッダテーブルの変更例**:
+
+```markdown
+| 項目 | 入力方式 | バリデーション | 備考 |
+|------|---------|--------------|------|
+| 契約先コード | マスタ選択（取引先） | 必須 | |
+| 納入先コード | マスタ選択（取引先） | 必須 | |
+| 納入場所 | テキスト | — | |
+| 納期 | 日付 | — | 未入力時は今日+7日を初期値 |
+| 内示番号 | テキスト | — | 横幅 span 2 |
+| 備考 | テキスト | — | `order-new` では Enter 順に含む。`order-new-alt` では Enter 順から除外 |
+```
+
+**完了基準**:
+- [ ] `order-new.md` のヘッダ・明細テーブルに「バリデーション」列が追加されている
+- [ ] `purchase-new.md` も同様に更新されている（現時点ではバリデーション未定義なら「—」）
+- [ ] TypeScript Spec のルールとマークダウンの記載が一致している
+
+---
+
 ### ステップ 6: 保存前バリデーションの組み込み
 
-**対象**: 画面ラッパー（`OrderNewPage.vue` または `ScreenWorkspaceView.vue` の `handleSave`）
+**対象**: `src/views/OrderNewPage.vue` の `handleSave`（発注画面は `src/views/PurchaseNewPage.vue`）
+
+> **注意**: 以前の設計で参照していた `ScreenWorkspaceView.vue` は C-view-refactor で廃止され、現在は存在しない。
+> 保存ロジックは各画面の Page コンポーネント（`OrderNewPage.vue`, `PurchaseNewPage.vue`）に直接ある。
 
 保存ハンドラの先頭でバリデーションを実行し、エラーがあれば保存を中断する。
+
+**`orderHeader` の型に関する注意**: `orderHeader` は `reactive({...})` で定義されており、`contractParty` / `deliveryParty` の値は `CodeMasterItem | null`（`{ code: string, name: string } | null`）。ステップ 3 の `executeRule` の `required` チェックは、この構造（`'code' in value` で code が空文字かどうか）に対応している。
 
 ```typescript
 async function handleSave() {
@@ -295,15 +342,16 @@ async function handleSave() {
     const result = await createOrder(...)
     // ...
   } catch (e) {
-    // 3. API 400 エラーの解析（ステップ 7）
+    // 3. API 400 エラーの解析（ステップ 7b）
   }
 }
 ```
 
 **完了基準**:
-- [ ] 保存前にバリデーションが実行される
+- [ ] `OrderNewPage.vue` の `handleSave` 先頭でバリデーションが実行される
 - [ ] エラーがあれば保存が中断される
-- [ ] エラー状態が ref に格納される
+- [ ] エラー状態が `validationErrors` ref に格納される
+- [ ] `PurchaseNewPage.vue` にも同様の仕組みを適用できる構造になっている
 
 ---
 
@@ -352,17 +400,87 @@ export function parseApiErrors(
 
 ---
 
+### ステップ 7b: API クライアントの 400 レスポンスボディ取得対応
+
+**対象**: `src/api/client.ts`
+
+現在の `createOrder` は `!res.ok` で一律 `throw new Error(...)` しており、400 レスポンスのボディを読まない。
+ステップ 7 の `parseApiErrors` を活用するため、400 のときにレスポンスボディを取得してスローする仕組みが必要。
+
+**実装方針**:
+
+```typescript
+export class ApiValidationError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly body: ApiErrorResponse,
+  ) {
+    super(`Validation failed: ${status}`)
+    this.name = 'ApiValidationError'
+  }
+}
+
+export async function createOrder(body: OrderCreateRequest): Promise<OrderCreateResponse> {
+  const url = `${baseUrl}/api/orders`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    if (res.status === 400) {
+      const errorBody = await res.json()
+      throw new ApiValidationError(res.status, errorBody)
+    }
+    throw new Error(`createOrder failed: ${res.status}`)
+  }
+  return (await res.json()) as OrderCreateResponse
+}
+```
+
+呼び出し側（`OrderNewPage.vue` の `handleSave`）では：
+
+```typescript
+} catch (e) {
+  if (e instanceof ApiValidationError) {
+    validationErrors.value = parseApiErrors(e.body, ORDER_FIELD_MAPPING)
+    return
+  }
+  // その他のエラーは従来通り
+  console.error('受注登録失敗:', e)
+  alert('受注の登録に失敗しました。コンソールを確認してください。')
+}
+```
+
+**完了基準**:
+- [ ] `ApiValidationError` クラスが定義・エクスポートされている
+- [ ] `createOrder` が 400 レスポンスのボディを取得して `ApiValidationError` をスローする
+- [ ] `handleSave` の catch で `ApiValidationError` を判定し、フィールドエラーに変換できる
+
+---
+
 ### ステップ 8: ヘッダフィールドのエラー表示 UI
 
-**対象**: `src/components/ScreenHeaderField.vue`
+**対象**: `src/components/ScreenHeaderField.vue` および `src/components/MasterCombobox.vue`
 
 エラーがあるフィールドにハイライトとメッセージを表示する。
 
 **実装方針**:
+
+#### ScreenHeaderField.vue
+
 - props に `error?: string` を追加
 - エラーがある場合:
-  - 入力要素に赤い枠線（`border-color: #dc2626`）
+  - `text` / `date` 入力要素に赤い枠線（`border-color: #dc2626`）
   - 入力要素の下にエラーメッセージ（赤字、12px）
+- `masterCombobox` の場合は `MasterCombobox` に `error` を伝搬する
+
+#### MasterCombobox.vue
+
+- props に `error?: string` を追加
+- エラーがある場合:
+  - 入力要素に赤い枠線と `aria-invalid="true"`
+  - 入力要素の下にエラーメッセージ
 - エラーがない場合: 通常表示
 
 **表示イメージ**:
@@ -377,7 +495,8 @@ export function parseApiErrors(
 
 **完了基準**:
 - [ ] `ScreenHeaderField` に `error` props が追加されている
-- [ ] エラーがある場合に赤い枠線とメッセージが表示される
+- [ ] `MasterCombobox` にも `error` props が追加され、`ScreenHeaderField` から伝搬される
+- [ ] エラーがある場合に赤い枠線とメッセージが表示される（全エディタタイプ共通）
 - [ ] エラーがない場合は通常表示
 
 ---
@@ -431,8 +550,12 @@ function getValidationCellStyle(params: CellClassParams): CellStyle | null {
 | `src/features/screen-engine/screenSpecTypes.ts` | `HeaderFieldSpec` にバリデーションを追加 |
 | `src/features/order-screen/orderNewSpec.ts` | 受注 Spec にルールを追加 |
 | `src/components/ScreenHeaderField.vue` | エラー表示 UI の追加先 |
-| `src/views/ScreenWorkspaceView.vue`（または画面ラッパー） | `handleSave` にバリデーション組み込み |
-| `src/api/client.ts` | API エラーレスポンスの型参照 |
+| `src/components/MasterCombobox.vue` | masterCombobox のエラー表示 UI の追加先 |
+| `src/views/OrderNewPage.vue` | 受注登録の `handleSave` にバリデーション組み込み |
+| `src/views/PurchaseNewPage.vue` | 発注登録の `handleSave` にバリデーション組み込み |
+| `src/api/client.ts` | 400 レスポンスボディ取得対応・`ApiValidationError` 追加 |
+| `docs/screen-specs/order-new.md` | バリデーション列をマークダウン仕様書に反映 |
+| `docs/screen-specs/purchase-new.md` | バリデーション列をマークダウン仕様書に反映 |
 
 ---
 
