@@ -462,10 +462,12 @@ export async function deleteOrder(id: number): Promise<void> {
 | ダブルクリックイベント | `@row-double-clicked` | `event.data` で行データにアクセス |
 | 選択行の取得 | `api.getSelectedRows()` | 削除時に使用 |
 | 読み取り専用 | 列定義に `editable` を設定しない | デフォルトで読み取り専用 |
+| Row Spanning（セル結合） | `enableCellSpan: true` + `colDef.spanRows: true` | v33.1 で追加。**Community 版で利用可能**。ステップ 10 参照 |
 
 公式リファレンス:
 - 行選択: https://www.ag-grid.com/vue-data-grid/row-selection-multi-row/
 - 行イベント: https://www.ag-grid.com/vue-data-grid/row-events/
+- Row Spanning: https://www.ag-grid.com/javascript-data-grid/row-spanning/
 
 ---
 
@@ -478,3 +480,109 @@ export async function deleteOrder(id: number): Promise<void> {
 | ページネーションが必要になる | H2 では全件取得で十分。件数が増えたら `limit` / `offset` パラメータを追加する |
 | `GET /api/orders` と `POST /api/orders` が同パス | REST としては正常。Spring Boot の `OrderController` に `@GetMapping` と `@PostMapping` を並べるだけで問題ない |
 | 検索フィールド ID と API パラメータ名の不一致 | `searchParamMapping` で宣言的に変換する。`masterCombobox` は値が `{ code, name }` なので `.code` の取り出しも必要 |
+
+---
+
+## ステップ 10: Row Spanning でヘッダ項目の重複表示を抑制
+
+### 背景
+
+明細データを一覧に含めると、1受注に複数明細がある場合にヘッダ項目（受注番号、契約先、納期など）が同一値で繰り返し表示され、視認性が悪い。
+
+```
+受注番号      | 契約先   | 行 | 製品コード | 数量
+ORD-2026-001 | ○○商事  | 1  | A001       | 10
+ORD-2026-001 | ○○商事  | 2  | B002       | 20     ← ヘッダ情報が冗長
+```
+
+AG Grid v33.1 で追加された **Row Spanning** 機能を使うと、連続する同一値のセルを自動結合して 1 セルにまとめられる。
+
+```
+受注番号      | 契約先   | 行 | 製品コード | 数量
+ORD-2026-001 | ○○商事  | 1  | A001       | 10
+             |         | 2  | B002       | 20     ← ヘッダ部分は結合
+```
+
+### 前提条件
+
+- AG Grid v33.1 以降（現在 v35.2.0 なので問題なし）
+- **Community 版で利用可能**（Enterprise 不要）
+
+### 実装方針
+
+#### 1. `ListResultColumn` 型に `spanRows` を追加
+
+**対象**: `src/features/screen-engine/screenSpecTypes.ts`
+
+```typescript
+export type ListResultColumn = {
+  field: string
+  headerName: string
+  width?: number
+  format?: 'date' | 'number' | 'text'
+  /** true にすると連続する同一値のセルを結合表示する（AG Grid Row Spanning） */
+  spanRows?: boolean
+}
+```
+
+#### 2. `ListScreenView.vue` でグリッドオプションに `enableCellSpan` を追加
+
+```typescript
+// AG Grid コンポーネントに追加
+:enable-cell-span="true"
+```
+
+列定義の生成で `spanRows` を反映する:
+
+```typescript
+const columnDefs = computed((): ColDef<Record<string, unknown>>[] => {
+  return spec.value.resultColumns.map((c) => ({
+    field: c.field,
+    headerName: c.headerName,
+    width: c.width,
+    valueFormatter: (p) => formatCellValue(p.value, c.format),
+    spanRows: c.spanRows ?? undefined,
+  }))
+})
+```
+
+#### 3. `orderListSpec.ts` のヘッダ系カラムに `spanRows: true` を付与
+
+明細行ごとに値が変わるカラム（`lineNo`, `productCode`, `productName`, `quantity`, `unitPrice`, `amount`）には付けず、受注ヘッダ由来で同一受注内では同じ値になるカラムだけに付ける。
+
+```typescript
+resultColumns: [
+  { field: 'orderNumber', headerName: '受注番号', width: 160, spanRows: true },
+  { field: 'lineNo', headerName: '行', width: 72 },
+  { field: 'productCode', headerName: '製品コード', width: 120 },
+  { field: 'productName', headerName: '製品名', width: 200 },
+  { field: 'quantity', headerName: '数量', width: 88, format: 'number' },
+  { field: 'unitPrice', headerName: '単価', width: 100, format: 'number' },
+  { field: 'amount', headerName: '明細金額', width: 120, format: 'number' },
+  { field: 'contractPartyName', headerName: '契約先', width: 160, spanRows: true },
+  { field: 'deliveryPartyName', headerName: '納入先', width: 160, spanRows: true },
+  { field: 'dueDate', headerName: '納期', width: 112, format: 'date', spanRows: true },
+  { field: 'totalAmount', headerName: '受注合計', width: 120, format: 'number', spanRows: true },
+  { field: 'lineCount', headerName: '明細行数', width: 96, format: 'number', spanRows: true },
+  { field: 'createdAt', headerName: '登録日時', width: 168, format: 'date', spanRows: true },
+],
+```
+
+### カスタム結合ロジック（参考）
+
+デフォルトでは「隣接行の値が等しければ結合」だが、コールバックで条件をカスタマイズできる:
+
+```typescript
+spanRows: ({ valueA, valueB }) => valueA === valueB
+```
+
+たとえば特定の値のときだけ結合を抑制する、といった制御が可能。
+
+### 完了基準
+
+- [ ] `ListResultColumn` に `spanRows?: boolean` が追加されている
+- [ ] `ListScreenView.vue` で `enableCellSpan: true` が設定されている
+- [ ] `orderListSpec.ts` のヘッダ系カラムに `spanRows: true` が設定されている
+- [ ] 同一受注の複数明細行でヘッダ項目が結合表示される
+- [ ] 明細固有のカラム（行番号、製品コード等）は結合されない
+- [ ] `npm run build` が成功する
