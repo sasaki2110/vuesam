@@ -1,3 +1,5 @@
+import type { ValidationRule } from './validation/validationTypes'
+
 /** ヘッダ1項目の宣言（テンプレは v-for で描画） */
 export type HeaderEditorType = 'masterCombobox' | 'text' | 'date'
 
@@ -12,6 +14,7 @@ export type HeaderFieldSpec = {
   optionsRef?: 'parties'
   /** date: 空のときフォーカスで入れる既定日（今日＋日数） */
   defaultDatePlusDays?: number
+  validation?: ValidationRule[]
 }
 
 export type NavigationSpec = {

@@ -1,3 +1,4 @@
+import type { ApiErrorResponse } from '@/features/screen-engine/validation/parseApiErrors'
 import type { CodeMasterItem } from '@/types/master'
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? ''
@@ -82,6 +83,16 @@ export type OrderCreateResponse = {
   message: string
 }
 
+export class ApiValidationError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly body: ApiErrorResponse,
+  ) {
+    super(`Validation failed: ${status}`)
+    this.name = 'ApiValidationError'
+  }
+}
+
 export async function createOrder(body: OrderCreateRequest): Promise<OrderCreateResponse> {
   const url = `${baseUrl}/api/orders`
   const res = await fetch(url, {
@@ -89,7 +100,18 @@ export async function createOrder(body: OrderCreateRequest): Promise<OrderCreate
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`createOrder failed: ${res.status}`)
+  if (!res.ok) {
+    if (res.status === 400) {
+      try {
+        const errorBody = (await res.json()) as ApiErrorResponse
+        throw new ApiValidationError(res.status, errorBody)
+      } catch (e) {
+        if (e instanceof ApiValidationError) throw e
+        throw new Error(`createOrder failed: ${res.status}`)
+      }
+    }
+    throw new Error(`createOrder failed: ${res.status}`)
+  }
   return (await res.json()) as OrderCreateResponse
 }
 

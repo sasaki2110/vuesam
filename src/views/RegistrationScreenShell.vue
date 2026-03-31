@@ -9,6 +9,7 @@ import {
   type GridReadyEvent,
 } from 'ag-grid-community'
 import { computed, onMounted, shallowRef } from 'vue'
+import type { FieldError } from '@/features/screen-engine/validation/validationTypes'
 import ScreenHeaderField from '@/components/ScreenHeaderField.vue'
 import type { HeaderFieldSpec } from '@/features/screen-engine/screenSpecTypes'
 import { useHeaderEnterNav } from '@/features/screen-engine/useHeaderEnterNav'
@@ -19,7 +20,10 @@ import 'ag-grid-community/styles/ag-theme-balham.css'
 
 ModuleRegistry.registerModules([AllCommunityModule])
 
-const props = defineProps<RegistrationShellProps>()
+const props = withDefaults(defineProps<RegistrationShellProps>(), {
+  validationErrors: () => [] as FieldError[],
+  gridSessionKey: 0,
+})
 const rowData = defineModel<unknown[]>('rowData', { required: true })
 const emit = defineEmits<RegistrationShellEmits>()
 
@@ -62,6 +66,15 @@ const { focusNextAfter, focusFirstInHeaderChain } = useHeaderEnterNav({
 })
 
 defineExpose({ focusFirstInHeaderChain })
+
+const gridLinesErrorMessage = computed(() => {
+  const msgs = props.validationErrors.filter((e) => e.fieldKey === 'lines').map((e) => e.message)
+  return msgs.length ? msgs.join(' ') : ''
+})
+
+function headerFieldError(fieldId: string): string | undefined {
+  return props.validationErrors.find((e) => e.fieldKey === fieldId)?.message
+}
 
 function onGridReady(e: GridReadyEvent) {
   gridApi.value = e.api
@@ -108,6 +121,7 @@ onMounted(() => {
               v-model="header[field.id]!"
               :field="field"
               :parties="parties"
+              :error="headerFieldError(field.id)"
               @enter-next="focusNextAfter(field.id)"
               @date-focus="onDateFieldFocus(field)"
             />
@@ -118,11 +132,16 @@ onMounted(() => {
           <p class="hint grid-hint">
             {{ gridHint }}
           </p>
+          <p v-if="gridLinesErrorMessage" class="grid-validation-msg" role="alert">
+            {{ gridLinesErrorMessage }}
+          </p>
           <div class="ag-theme-balham grid-wrap">
             <AgGridVue
+              :key="gridSessionKey"
               v-model="rowData"
               theme="legacy"
               style="width: 100%; height: 100%"
+              :enable-browser-tooltips="true"
               :popup-parent="popupParentEl"
               :column-defs="columnDefs"
               :default-col-def="defaultColDef"
@@ -269,6 +288,16 @@ onMounted(() => {
   margin: 0;
   border-bottom: 1px solid #9aa7b8;
 }
+.grid-validation-msg {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: #dc2626;
+  background: #fef2f2;
+  border-bottom: 1px solid #fecaca;
+  font-family: ui-monospace, monospace;
+}
 .grid-wrap {
   flex: 1;
   min-height: 0;
@@ -339,5 +368,13 @@ onMounted(() => {
   border: 1px solid #3d4f63;
   border-radius: 4px;
   color: #f8fafc;
+}
+</style>
+
+<!-- AG Grid はセルがシャドウ側のため scoped では当たらない -->
+<style>
+.ag-theme-balham .ag-cell.ag-cell-validation-error {
+  background-color: #fef2f2 !important;
+  border-bottom: 2px solid #dc2626 !important;
 }
 </style>

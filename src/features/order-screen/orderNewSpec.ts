@@ -8,6 +8,7 @@ import type {
   NavigationSpec,
   OrderScreenSpec,
 } from '@/features/screen-engine/screenSpecTypes'
+import type { GridColumnValidation } from '@/features/screen-engine/validation/validateGridRows'
 
 export type { OrderScreenSpec } from '@/features/screen-engine/screenSpecTypes'
 
@@ -26,6 +27,7 @@ export const ORDER_HEADER_FIELDS: HeaderFieldSpec[] = [
     editorType: 'masterCombobox',
     optionsRef: 'parties',
     placeholder: '例: 1001',
+    validation: [{ type: 'required' }],
   },
   {
     id: 'deliveryParty',
@@ -33,6 +35,7 @@ export const ORDER_HEADER_FIELDS: HeaderFieldSpec[] = [
     editorType: 'masterCombobox',
     optionsRef: 'parties',
     placeholder: '例: 3001',
+    validation: [{ type: 'required' }],
   },
   {
     id: 'deliveryLocation',
@@ -117,6 +120,43 @@ export function createNextOrderRow(prev: OrderLineRow[]): OrderLineRow {
 export function isOrderLineFilled(row: OrderLineRow): boolean {
   return row.productCode.trim() !== '' || row.quantity > 0 || row.unitPrice > 0
 }
+
+export const ORDER_GRID_VALIDATIONS: GridColumnValidation[] = [
+  { colId: 'productCode', label: '製品コード', validation: [{ type: 'required' }] },
+  {
+    colId: 'quantity',
+    label: '数量',
+    validation: [
+      {
+        type: 'custom',
+        validate: (v) =>
+          typeof v === 'number' && v > 0 ? null : '数量は1以上の整数を入力してください',
+      },
+    ],
+  },
+  {
+    colId: 'unitPrice',
+    label: '単価',
+    validation: [
+      {
+        type: 'custom',
+        validate: (v) =>
+          typeof v === 'number' && v > 0 ? null : '単価は1以上の整数を入力してください',
+      },
+    ],
+  },
+  {
+    colId: 'amount',
+    label: '金額',
+    validation: [
+      {
+        type: 'custom',
+        validate: (v) =>
+          typeof v === 'number' && v > 0 ? null : '金額は必須です',
+      },
+    ],
+  },
+]
 
 export function buildOrderColumnDefs(
   products: readonly CodeMasterItem[],

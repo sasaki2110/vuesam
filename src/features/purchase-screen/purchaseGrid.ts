@@ -16,6 +16,10 @@ export function createNextPurchaseRow(prev: PurchaseLineRow[]): PurchaseLineRow 
   return { lineNo, materialCode: '', qty: 0 }
 }
 
+export function isPurchaseLineFilled(row: PurchaseLineRow): boolean {
+  return row.materialCode.trim() !== '' || row.qty > 0
+}
+
 export function buildPurchaseColumnDefs(): ColDef<PurchaseLineRow>[] {
   return [
     {

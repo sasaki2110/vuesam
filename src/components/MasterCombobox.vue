@@ -6,6 +6,7 @@ const props = defineProps<{
   label: string
   placeholder?: string
   options: readonly CodeMasterItem[]
+  error?: string
 }>()
 
 const model = defineModel<CodeMasterItem | null>({ default: null })
@@ -157,11 +158,13 @@ defineExpose({
         v-model="inputValue"
         type="text"
         class="mc-input"
+        :class="{ 'mc-input--error': error }"
         :placeholder="placeholder"
         role="combobox"
         autocomplete="off"
         :aria-expanded="open && filtered.length > 0 ? 'true' : 'false'"
         aria-haspopup="listbox"
+        :aria-invalid="error ? 'true' : undefined"
         @pointerdown="onInputPointerDown"
         @input="onInput"
         @focus="open = true"
@@ -180,6 +183,7 @@ defineExpose({
         </li>
       </ul>
     </div>
+    <p v-if="error" class="mc-error">{{ error }}</p>
   </div>
 </template>
 
@@ -210,6 +214,18 @@ defineExpose({
   outline: 2px solid #1976d2;
   outline-offset: 0;
   border-color: #1976d2;
+}
+.mc-input--error {
+  border-color: #dc2626;
+}
+.mc-input--error:focus {
+  outline-color: #dc2626;
+  border-color: #dc2626;
+}
+.mc-error {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #dc2626;
 }
 .mc-list {
   position: absolute;

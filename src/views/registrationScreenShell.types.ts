@@ -5,6 +5,7 @@ import type {
   GridReadyEvent,
 } from 'ag-grid-community'
 import type { HeaderFieldSpec, NavigationSpec } from '@/features/screen-engine/screenSpecTypes'
+import type { FieldError } from '@/features/screen-engine/validation/validationTypes'
 import type { CodeMasterItem } from '@/types/master'
 
 /** 行データは `v-model:row-data` で渡す（ag-grid の v-model と整合） */
@@ -19,6 +20,10 @@ export type RegistrationShellProps = {
   getRowId: (params: { data: unknown }) => string
   parties: CodeMasterItem[]
   products: CodeMasterItem[]
+  /** ヘッダ field id / グリッド `row:col` / 明細全体は `lines` */
+  validationErrors?: FieldError[]
+  /** 増やすたびにグリッドを再マウント（エラー表示のリセットを確実にする） */
+  gridSessionKey?: number
 }
 
 export type RegistrationShellEmits = {

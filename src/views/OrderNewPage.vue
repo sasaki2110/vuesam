@@ -1,15 +1,21 @@
 <script setup lang="ts">
 import type { CellValueChangedEvent, ColDef, GridApi, GridReadyEvent } from 'ag-grid-community'
-import { computed, nextTick, onMounted, reactive, ref, shallowRef } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import type { CodeMasterItem } from '@/types/master'
 import { useRoute } from 'vue-router'
-import { createOrder, fetchParties, fetchProducts } from '@/api/client'
+import { ApiValidationError, createOrder, fetchParties, fetchProducts } from '@/api/client'
 import { PARTIES as MOCK_PARTIES, PRODUCTS as MOCK_PRODUCTS } from '@/constants/mockData'
 import type { HeaderFieldSpec } from '@/features/screen-engine/screenSpecTypes'
+import { mergeColDefWithValidation } from '@/features/screen-engine/validation/agGridValidation'
+import { parseApiErrors, ORDER_FIELD_MAPPING } from '@/features/screen-engine/validation/parseApiErrors'
+import type { FieldError } from '@/features/screen-engine/validation/validationTypes'
+import { validateHeaderFields } from '@/features/screen-engine/validation/validateFields'
+import { validateGridRows } from '@/features/screen-engine/validation/validateGridRows'
 import { useGridEnterNav } from '@/features/screen-engine/useGridEnterNav'
 import { useKeySpec } from '@/features/screen-engine/useKeySpec'
 import { applyOrderCommitSpec } from '@/features/order-screen/orderCommitRules'
 import {
+  ORDER_GRID_VALIDATIONS,
   ORDER_HEADER_FIELDS,
   buildColumnsBySpec,
   createEmptyOrderRows,
@@ -39,6 +45,27 @@ const orderRowData = ref<OrderLineRow[]>(createEmptyOrderRows())
 const parties = ref<CodeMasterItem[]>([])
 const products = ref<CodeMasterItem[]>([])
 const gridApiOrder = shallowRef<GridApi<OrderLineRow> | null>(null)
+const validationErrors = ref<FieldError[]>([])
+/** 新規時に増やして AgGridVue を再マウントし、セル装飾を確実に消す */
+const gridSessionKey = ref(0)
+
+/**
+ * cellStyle / 行データの反映タイミングがずれると、エラー解除後も赤背景が残ることがある。
+ * refreshCells + redrawRows を、Vue の更新後にかける。
+ */
+watch(validationErrors, async (errs) => {
+  await nextTick()
+  await nextTick()
+  const api = gridApiOrder.value
+  if (!api) return
+  api.refreshCells({ force: true })
+  api.redrawRows()
+  const firstGrid = errs.find((e) => /^\d+:/.test(e.fieldKey))
+  if (firstGrid) {
+    const rowIdx = Number(firstGrid.fieldKey.split(':')[0])
+    if (!Number.isNaN(rowIdx)) api.ensureIndexVisible(rowIdx, 'middle')
+  }
+})
 
 const orderNav = useGridEnterNav<OrderLineRow>({
   editChainColIds: computed(() => spec.value.navigationSpec.gridEditChainColIds),
@@ -88,29 +115,46 @@ function snapshotOrderRowsFromGrid(): OrderLineRow[] {
 }
 
 function handleNew() {
+  validationErrors.value = []
   orderNav.resetEnterNavAdvance()
   gridApiOrder.value?.stopEditing(true)
   Object.assign(orderHeader, initHeaderRecord(ORDER_HEADER_FIELDS))
   orderRowData.value = createEmptyOrderRows()
+  gridSessionKey.value += 1
   requestAnimationFrame(() => shellRef.value?.focusFirstInHeaderChain())
 }
 
 async function handleSave() {
   gridApiOrder.value?.stopEditing(false)
   await nextTick()
-  const lines = snapshotOrderRowsFromGrid()
-    .filter((r) => isOrderLineFilled(r))
-    .map((r) => ({
-      productCode: r.productCode,
-      productName: r.productName,
-      quantity: r.quantity,
-      unitPrice: r.unitPrice,
-      amount: r.amount,
-    }))
-  if (lines.length === 0) {
-    alert('明細が1行以上必要です。製品コード・数量・単価などを入力してから保存してください。')
+  const snapshot = snapshotOrderRowsFromGrid()
+  const headerResult = validateHeaderFields(spec.value.headerFields, orderHeader)
+  const filled = snapshot.filter((r) => isOrderLineFilled(r))
+  const linesErrors: FieldError[] = []
+  if (filled.length === 0) {
+    linesErrors.push({
+      fieldKey: 'lines',
+      message:
+        '明細が1行以上必要です。製品コード・数量・単価などを入力してから保存してください。',
+    })
+  }
+  const gridResult = validateGridRows(snapshot, ORDER_GRID_VALIDATIONS, (row) =>
+    isOrderLineFilled(row as OrderLineRow),
+  )
+  const allErrors = [...headerResult.errors, ...linesErrors, ...gridResult.errors]
+  if (allErrors.length > 0) {
+    validationErrors.value = allErrors
     return
   }
+  validationErrors.value = []
+
+  const lines = filled.map((r) => ({
+    productCode: r.productCode,
+    productName: r.productName,
+    quantity: r.quantity,
+    unitPrice: r.unitPrice,
+    amount: r.amount,
+  }))
   try {
     const result = await createOrder({
       contractPartyCode: (orderHeader.contractParty as { code?: string } | null)?.code ?? '',
@@ -122,6 +166,12 @@ async function handleSave() {
     })
     alert(`受注を登録しました（受注番号: ${result.orderNumber}）`)
   } catch (e) {
+    if (e instanceof ApiValidationError) {
+      const { fieldErrors, globalMessage } = parseApiErrors(e.body, ORDER_FIELD_MAPPING)
+      if (fieldErrors.length > 0) validationErrors.value = fieldErrors
+      if (globalMessage) alert(globalMessage)
+      return
+    }
     console.error('受注登録失敗:', e)
     alert('受注の登録に失敗しました。コンソールを確認してください。')
     return
@@ -150,7 +200,12 @@ function onCellValueChanged(e: CellValueChangedEvent<OrderLineRow>) {
   applyOrderCommitSpec(e, products.value)
 }
 
-const orderColumnDefs = computed(() => buildColumnsBySpec(spec.value, products.value))
+const orderColumnDefs = computed(() => {
+  void validationErrors.value.map((e) => `${e.fieldKey}\0${e.message}`).join('\n')
+  return buildColumnsBySpec(spec.value, products.value).map((c) =>
+    mergeColDefWithValidation(c, validationErrors),
+  )
+})
 
 const defaultColDef = computed((): ColDef => ({
   sortable: false,
@@ -195,6 +250,8 @@ onMounted(() => {
     :get-row-id="getRowId as (params: { data: unknown }) => string"
     :parties="parties"
     :products="products"
+    :validation-errors="validationErrors"
+    :grid-session-key="gridSessionKey"
     @grid-ready="onGridReady"
     @cell-value-changed="onCellValueChanged"
     @cell-editing-stopped="orderNav.onCellEditingStopped"

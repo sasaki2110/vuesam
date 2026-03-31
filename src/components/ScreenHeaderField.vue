@@ -7,6 +7,7 @@ import type { HeaderFieldSpec } from '@/features/screen-engine/screenSpecTypes'
 const props = defineProps<{
   field: HeaderFieldSpec
   parties: readonly CodeMasterItem[]
+  error?: string
 }>()
 
 const model = defineModel<unknown>({ required: true })
@@ -42,6 +43,7 @@ function onDateFocus() {
     :label="field.label"
     :placeholder="field.placeholder"
     :options="parties"
+    :error="error"
     @enter-next="emit('enterNext')"
   />
   <div
@@ -58,7 +60,9 @@ function onDateFocus() {
       v-model="(model as string)"
       type="text"
       class="field-input"
+      :class="{ 'field-input--error': error }"
       :placeholder="field.placeholder"
+      :aria-invalid="error ? 'true' : undefined"
       @keydown.enter.exact.prevent="emit('enterNext')"
     />
     <input
@@ -68,9 +72,12 @@ function onDateFocus() {
       v-model="(model as string)"
       type="date"
       class="field-input"
+      :class="{ 'field-input--error': error }"
+      :aria-invalid="error ? 'true' : undefined"
       @focus="onDateFocus"
       @keydown.enter.exact.prevent="emit('enterNext')"
     />
+    <p v-if="error" class="field-error">{{ error }}</p>
   </div>
 </template>
 
@@ -98,6 +105,18 @@ function onDateFocus() {
   outline: 2px solid #1976d2;
   outline-offset: 0;
   border-color: #1976d2;
+}
+.field-input--error {
+  border-color: #dc2626;
+}
+.field-input--error:focus {
+  outline-color: #dc2626;
+  border-color: #dc2626;
+}
+.field-error {
+  margin: 0;
+  font-size: 12px;
+  color: #dc2626;
 }
 @media (min-width: 768px) {
   .field-span2 {

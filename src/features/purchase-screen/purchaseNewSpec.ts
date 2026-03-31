@@ -1,6 +1,22 @@
 import type { PurchaseScreenSpec } from '@/features/screen-engine/screenSpecTypes'
+import type { GridColumnValidation } from '@/features/screen-engine/validation/validateGridRows'
 
 export const PURCHASE_INITIAL_ROWS = 10
+
+export const PURCHASE_GRID_VALIDATIONS: GridColumnValidation[] = [
+  { colId: 'materialCode', label: '品目コード', validation: [{ type: 'required' }] },
+  {
+    colId: 'qty',
+    label: '数量',
+    validation: [
+      {
+        type: 'custom',
+        validate: (v) =>
+          typeof v === 'number' && v > 0 ? null : '数量は1以上で入力してください',
+      },
+    ],
+  },
+]
 
 export const PURCHASE_NEW_SPEC: PurchaseScreenSpec = {
   id: 'purchase-new',
@@ -13,6 +29,7 @@ export const PURCHASE_NEW_SPEC: PurchaseScreenSpec = {
       editorType: 'masterCombobox',
       optionsRef: 'parties',
       placeholder: '例: 1001',
+      validation: [{ type: 'required' }],
     },
     {
       id: 'note',

@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import type { CellValueChangedEvent, ColDef, GridApi, GridReadyEvent } from 'ag-grid-community'
-import { computed, nextTick, onMounted, reactive, ref, shallowRef } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { fetchParties } from '@/api/client'
 import { PARTIES as MOCK_PARTIES } from '@/constants/mockData'
 import type { HeaderFieldSpec } from '@/features/screen-engine/screenSpecTypes'
+import { mergeColDefWithValidation } from '@/features/screen-engine/validation/agGridValidation'
+import type { FieldError } from '@/features/screen-engine/validation/validationTypes'
+import { validateHeaderFields } from '@/features/screen-engine/validation/validateFields'
+import { validateGridRows } from '@/features/screen-engine/validation/validateGridRows'
 import { useGridEnterNav } from '@/features/screen-engine/useGridEnterNav'
 import { useKeySpec } from '@/features/screen-engine/useKeySpec'
 import { applyPurchaseCommitSpec } from '@/features/purchase-screen/purchaseCommitRules'
@@ -11,8 +15,9 @@ import {
   buildPurchaseColumnDefs,
   createEmptyPurchaseRows,
   createNextPurchaseRow,
+  isPurchaseLineFilled,
 } from '@/features/purchase-screen/purchaseGrid'
-import { PURCHASE_NEW_SPEC } from '@/features/purchase-screen/purchaseNewSpec'
+import { PURCHASE_GRID_VALIDATIONS, PURCHASE_NEW_SPEC } from '@/features/purchase-screen/purchaseNewSpec'
 import type { PurchaseLineRow } from '@/features/purchase-screen/purchaseTypes'
 import type { CodeMasterItem } from '@/types/master'
 import RegistrationScreenShell from '@/views/RegistrationScreenShell.vue'
@@ -32,6 +37,22 @@ const purchaseRowData = ref<PurchaseLineRow[]>(createEmptyPurchaseRows())
 const parties = ref<CodeMasterItem[]>([])
 const products = ref<CodeMasterItem[]>([])
 const gridApiPurchase = shallowRef<GridApi<PurchaseLineRow> | null>(null)
+const validationErrors = ref<FieldError[]>([])
+const gridSessionKey = ref(0)
+
+watch(validationErrors, async (errs) => {
+  await nextTick()
+  await nextTick()
+  const api = gridApiPurchase.value
+  if (!api) return
+  api.refreshCells({ force: true })
+  api.redrawRows()
+  const firstGrid = errs.find((e) => /^\d+:/.test(e.fieldKey))
+  if (firstGrid) {
+    const rowIdx = Number(firstGrid.fieldKey.split(':')[0])
+    if (!Number.isNaN(rowIdx)) api.ensureIndexVisible(rowIdx, 'middle')
+  }
+})
 
 const purchaseNav = useGridEnterNav<PurchaseLineRow>({
   editChainColIds: computed(() => PURCHASE_NEW_SPEC.navigationSpec.gridEditChainColIds),
@@ -85,21 +106,40 @@ function snapshotPurchaseRowsFromGrid(): PurchaseLineRow[] {
 const shellRef = ref<InstanceType<typeof RegistrationScreenShell> | null>(null)
 
 function handleNew() {
+  validationErrors.value = []
   purchaseNav.resetEnterNavAdvance()
   gridApiPurchase.value?.stopEditing(true)
   Object.assign(purchaseHeader, initHeaderRecord(PURCHASE_NEW_SPEC.headerFields))
   purchaseRowData.value = createEmptyPurchaseRows()
+  gridSessionKey.value += 1
   requestAnimationFrame(() => shellRef.value?.focusFirstInHeaderChain())
 }
 
 async function handleSave() {
   gridApiPurchase.value?.stopEditing(false)
   await nextTick()
+  const snapshot = snapshotPurchaseRowsFromGrid()
+  const headerResult = validateHeaderFields(PURCHASE_NEW_SPEC.headerFields, purchaseHeader)
+  const filled = snapshot.filter((r) => isPurchaseLineFilled(r))
+  const linesErrors: FieldError[] = []
+  if (filled.length === 0) {
+    linesErrors.push({
+      fieldKey: 'lines',
+      message: '明細が1行以上必要です。品目コード・数量を入力してから保存してください。',
+    })
+  }
+  const gridResult = validateGridRows(snapshot, PURCHASE_GRID_VALIDATIONS, (row) =>
+    isPurchaseLineFilled(row as PurchaseLineRow),
+  )
+  const allErrors = [...headerResult.errors, ...linesErrors, ...gridResult.errors]
+  if (allErrors.length > 0) {
+    validationErrors.value = allErrors
+    return
+  }
+  validationErrors.value = []
   console.info('[発注保存モック]', {
     header: { ...purchaseHeader },
-    lines: snapshotPurchaseRowsFromGrid().filter(
-      (r) => r.materialCode.trim() !== '' || r.qty > 0,
-    ),
+    lines: filled,
   })
   alert('発注を保存しました（コンソールにモック出力）')
   handleNew()
@@ -121,7 +161,10 @@ function onCellValueChanged(e: CellValueChangedEvent<PurchaseLineRow>) {
   applyPurchaseCommitSpec(e)
 }
 
-const purchaseColumnDefs = computed(() => buildPurchaseColumnDefs())
+const purchaseColumnDefs = computed(() => {
+  void validationErrors.value.map((e) => `${e.fieldKey}\0${e.message}`).join('\n')
+  return buildPurchaseColumnDefs().map((c) => mergeColDefWithValidation(c, validationErrors))
+})
 
 const defaultColDef = computed((): ColDef => ({
   sortable: false,
@@ -161,6 +204,8 @@ onMounted(() => {
     :get-row-id="getRowId as (params: { data: unknown }) => string"
     :parties="parties"
     :products="products"
+    :validation-errors="validationErrors"
+    :grid-session-key="gridSessionKey"
     @grid-ready="onGridReady"
     @cell-value-changed="onCellValueChanged"
     @cell-editing-stopped="purchaseNav.onCellEditingStopped"
