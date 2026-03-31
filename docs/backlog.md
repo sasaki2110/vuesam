@@ -44,8 +44,8 @@ C（ScreenWorkspaceView の分割）と同じアプローチ。
 
 ### 関連ドキュメント
 
-- [next-roadmap/B-list-screen.md](./next-roadmap/B-list-screen.md) — 一覧画面の設計
-- [next-roadmap/C-view-refactor.md](./next-roadmap/C-view-refactor.md) — 登録画面で同種の分割を実施済み（参考パターン）
+- [archive/next-roadmap/B-list-screen.md](./archive/next-roadmap/B-list-screen.md) — 一覧画面の設計
+- [archive/next-roadmap/C-view-refactor.md](./archive/next-roadmap/C-view-refactor.md) — 登録画面で同種の分割を実施済み（参考パターン）
 
 ---
 
@@ -53,7 +53,7 @@ C（ScreenWorkspaceView の分割）と同じアプローチ。
 
 ### 現状
 
-[next-roadmap/A-grid-two-row-display.md](./next-roadmap/A-grid-two-row-display.md) で明細の疑似 2 段化を検討したが、以下の理由で **先送り** としている。
+[archive/next-roadmap/A-grid-two-row-display.md](./archive/next-roadmap/A-grid-two-row-display.md) で明細の疑似 2 段化を検討したが、以下の理由で **先送り** としている。
 
 - AG Grid の設計思想に逆らう力技が必要で、実装が複雑
 - 具体的な画面要件（何列の画面で横幅がどれだけ不足するか）が確定していない
@@ -85,4 +85,4 @@ A-grid-two-row-display.md には 5 つの代替案が整理されている。
 
 ### 関連ドキュメント
 
-- [next-roadmap/A-grid-two-row-display.md](./next-roadmap/A-grid-two-row-display.md) — 技術設計・代替案・方式 C の詳細設計
+- [archive/next-roadmap/A-grid-two-row-display.md](./archive/next-roadmap/A-grid-two-row-display.md) — 技術設計・代替案・方式 C の詳細設計
