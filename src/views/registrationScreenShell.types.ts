@@ -11,6 +11,10 @@ import type { CodeMasterItem } from '@/types/master'
 /** 行データは `v-model:row-data` で渡す（ag-grid の v-model と整合） */
 export type RegistrationShellProps = {
   title: string
+  /** 例: 受注番号の表示（変更画面用） */
+  headerSubtitle?: string
+  /** 左ヘッダボタン文言（既定: 新規（F01）） */
+  newButtonLabel?: string
   gridHint: string
   headerFields: HeaderFieldSpec[]
   navigationSpec: NavigationSpec

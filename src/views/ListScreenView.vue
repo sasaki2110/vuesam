@@ -312,11 +312,31 @@ function onRowDoubleClicked(e: RowDoubleClickedEvent<Record<string, unknown>>) {
   })
 }
 
+function handleEdit() {
+  const api = gridApi.value
+  if (!api) return
+  const rows = api.getSelectedRows()
+  if (rows.length === 0) {
+    alert('変更する行を選択してください。')
+    return
+  }
+  const first = rows[0]
+  if (!first) return
+  const param = spec.value.rowNavigation.paramField
+  const raw = first[param]
+  if (raw == null) return
+  void router.push({
+    name: spec.value.rowNavigation.routeName,
+    params: { id: String(raw) },
+  })
+}
+
 useKeySpec(
   () => spec.value.keySpec,
   {
     search: runSearch,
     clearSearch,
+    edit: handleEdit,
   },
 )
 
@@ -367,6 +387,14 @@ onMounted(() => {
 
         <section class="card toolbar-card">
           <div class="toolbar">
+            <button
+              type="button"
+              class="btn btn-outline"
+              :disabled="loading || selectedCount === 0"
+              @click="handleEdit"
+            >
+              変更（F10）
+            </button>
             <button
               v-if="spec.deleteAction"
               type="button"

@@ -26,7 +26,14 @@ export type NavigationSpec = {
   gridEnterStopEditingColIds: readonly string[]
 }
 
-export type KeyActionId = 'new' | 'save' | 'mockAlert' | 'search' | 'clearSearch'
+export type KeyActionId =
+  | 'new'
+  | 'save'
+  | 'mockAlert'
+  | 'search'
+  | 'clearSearch'
+  | 'edit'
+  | 'backToList'
 
 export type ListResultColumn = {
   field: string

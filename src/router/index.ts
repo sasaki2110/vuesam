@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
 import ListScreenView from '@/views/ListScreenView.vue'
-import OrderEditPlaceholderView from '@/views/OrderEditPlaceholderView.vue'
+import OrderEditPage from '@/views/OrderEditPage.vue'
 import OrderNewPage from '@/views/OrderNewPage.vue'
 import PurchaseNewPage from '@/views/PurchaseNewPage.vue'
 
@@ -22,7 +22,7 @@ const router = createRouter({
     {
       path: '/orders/:id/edit',
       name: 'order-edit',
-      component: OrderEditPlaceholderView,
+      component: OrderEditPage,
       meta: { requiresAuth: true },
     },
     {

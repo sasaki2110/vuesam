@@ -21,6 +21,8 @@ import 'ag-grid-community/styles/ag-theme-balham.css'
 ModuleRegistry.registerModules([AllCommunityModule])
 
 const props = withDefaults(defineProps<RegistrationShellProps>(), {
+  headerSubtitle: '',
+  newButtonLabel: '新規（F01）',
   validationErrors: () => [] as FieldError[],
   gridSessionKey: 0,
 })
@@ -102,9 +104,14 @@ onMounted(() => {
 <template>
   <div class="page">
     <header class="hdr">
-      <h1 class="hdr-title">{{ title }}</h1>
+      <div class="hdr-title-block">
+        <h1 class="hdr-title">{{ title }}</h1>
+        <p v-if="props.headerSubtitle" class="hdr-subtitle">{{ props.headerSubtitle }}</p>
+      </div>
       <div class="hdr-actions">
-        <button type="button" class="btn btn-outline" @click="emit('new')">新規（F01）</button>
+        <button type="button" class="btn btn-outline" @click="emit('new')">
+          {{ props.newButtonLabel }}
+        </button>
         <button type="button" class="btn btn-primary" @click="emit('save')">保存 (F12)</button>
       </div>
     </header>
@@ -209,11 +216,21 @@ onMounted(() => {
   border-bottom: 1px solid #94a3b8;
   background: #cfd8e3;
 }
+.hdr-title-block {
+  min-width: 0;
+}
 .hdr-title {
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
   font-family: ui-monospace, monospace;
+}
+.hdr-subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: ui-monospace, monospace;
+  color: #334155;
 }
 .hdr-actions {
   display: flex;

@@ -70,6 +70,7 @@ export const ORDER_LIST_SPEC: ListScreenSpec = {
   searchFieldEnterOrder: ['orderNumber', 'contractParty', 'dueDateFrom', 'dueDateTo'],
   keySpec: {
     F1: 'clearSearch',
+    F10: 'edit',
     F12: 'search',
   },
 }

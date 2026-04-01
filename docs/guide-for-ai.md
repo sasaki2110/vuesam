@@ -16,16 +16,17 @@
 4. [ディレクトリ構成](#4-ディレクトリ構成)
 5. [登録画面の実装手順](#5-登録画面の実装手順)
 6. [一覧画面の実装手順](#6-一覧画面の実装手順)
-7. [Spec リファレンス](#7-spec-リファレンス)
-8. [グリッド列定義（ColDef）の組み立て方](#8-グリッド列定義coldefの組み立て方)
-9. [Editor Registry — フィールド型システム](#9-editor-registry--フィールド型システム)
-10. [Commit Rules — セル確定時ロジック](#10-commit-rules--セル確定時ロジック)
-11. [バリデーション](#11-バリデーション)
-12. [Enter ナビゲーション](#12-enter-ナビゲーション)
-13. [ファンクションキー](#13-ファンクションキー)
-14. [API クライアント](#14-api-クライアント)
-15. [バックエンド API 契約](#15-バックエンド-api-契約)
-16. [実装チェックリスト](#16-実装チェックリスト)
+7. [変更画面の実装手順](#7-変更画面の実装手順)
+8. [Spec リファレンス](#8-spec-リファレンス)
+9. [グリッド列定義（ColDef）の組み立て方](#9-グリッド列定義coldefの組み立て方)
+10. [Editor Registry — フィールド型システム](#10-editor-registry--フィールド型システム)
+11. [Commit Rules — セル確定時ロジック](#11-commit-rules--セル確定時ロジック)
+12. [バリデーション](#12-バリデーション)
+13. [Enter ナビゲーション](#13-enter-ナビゲーション)
+14. [ファンクションキー](#14-ファンクションキー)
+15. [API クライアント](#15-api-クライアント)
+16. [バックエンド API 契約](#16-バックエンド-api-契約)
+17. [実装チェックリスト](#17-実装チェックリスト)
 
 ---
 
@@ -60,6 +61,7 @@ docs/screen-specs/            src/features/<screen>-screen/
 - 登録画面: `src/features/order-screen/` + `src/views/OrderNewPage.vue`
 - 横展開例: `src/features/purchase-screen/` + `src/views/PurchaseNewPage.vue`
 - 一覧画面: `src/features/order-screen/orderListSpec.ts` + `src/views/ListScreenView.vue`
+- 変更画面: `src/views/OrderEditPage.vue`（`OrderNewPage.vue` の差分パターン）
 
 ---
 
@@ -124,7 +126,7 @@ docs/screen-specs/            src/features/<screen>-screen/
 
 - 「F1: 新規」「F12: 保存」は登録画面の共通デフォルト（`defaultKeySpec.ts`）→ Spec では省略可
 - 「F1: 検索条件クリア」「F12: 検索実行」は一覧用 → `keySpec` に明示
-- それ以外の `F<N>: <機能名>` → `keySpec` に追加。`KeyActionId` に新しいアクションが必要な場合は `screenSpecTypes.ts` に追加
+- それ以外の `F<N>: <機能名>` → `keySpec` に追加。`KeyActionId` に新しいアクションが必要な場合は `screenSpecTypes.ts` に追加（例: 一覧の変更遷移 `edit`、変更画面の一覧戻り `backToList`）
 
 ---
 
@@ -136,7 +138,7 @@ docs/screen-specs/            src/features/<screen>-screen/
 │  ・Spec の選択、マスタ取得、保存処理、CommitRule 接続     │
 ├─────────────────────────────────────────────────────────┤
 │  共通シェル                                              │
-│  ・RegistrationScreenShell.vue  (登録系)                 │
+│  ・RegistrationScreenShell.vue  (登録／変更系)            │
 │  ・ListScreenView.vue           (一覧系)                 │
 │  ・ヘッダ描画、AG Grid、Fキー、Enter 連鎖               │
 ├─────────────────────────────────────────────────────────┤
@@ -152,7 +154,7 @@ docs/screen-specs/            src/features/<screen>-screen/
 ```
 
 **設計原則:**
-- 新しい画面を追加するとき、**既存の Vue コンポーネントを変更しない**
+- 新しい画面を追加するとき、**共通シェルは極力変えず、Props で差分を吸収する**（どうしても足りないときだけ拡張）
 - 業務ロジックは **TypeScript の Spec / Rules** に集約し、Vue テンプレートを薄く保つ
 - AG Grid の `ColDef` は画面固有モジュールで組み立て、共通シェルには完成品を渡す
 
@@ -197,10 +199,11 @@ src/
 │   ├── order.ts                  # 受注のドメイン型
 │   └── master.ts                 # マスタの共通型
 ├── views/
-│   ├── RegistrationScreenShell.vue       # 登録画面の共通シェル（変更不要）
+│   ├── RegistrationScreenShell.vue       # 登録／変更の共通シェル（`newButtonLabel` 等で差分可）
 │   ├── registrationScreenShell.types.ts  # シェルの Props/Emits 型
 │   ├── ListScreenView.vue                # 一覧画面の共通シェル（変更不要）
 │   ├── OrderNewPage.vue                  # 受注登録ページ（テンプレート）
+│   ├── OrderEditPage.vue                 # 受注変更ページ（更新系）
 │   └── PurchaseNewPage.vue               # 発注登録ページ（横展開例）
 ├── router/                       # Vue Router
 └── constants/
@@ -375,6 +378,7 @@ export const <SCREEN>_LIST_SPEC: ListScreenSpec = {
   searchFieldEnterOrder: [/* 検索条件表の行順 */],
   keySpec: {
     F1: 'clearSearch',
+    F10: 'edit', // 変更画面へ（KeyActionId と ListScreenView のハンドラが必要）
     F12: 'search',
   },
 }
@@ -396,7 +400,7 @@ export const <SCREEN>_LIST_SPEC: ListScreenSpec = {
   path: '/<resource>',
   name: '<screen>-list',
   component: () => import('@/views/ListScreenView.vue'),
-  meta: { listSpecId: '<screen>-list' },
+  meta: { requiresAuth: true, screenSpecId: '<screen>-list' },
 }
 ```
 
@@ -408,9 +412,71 @@ npm run build
 
 ---
 
-## 7. Spec リファレンス
+## 7. 変更画面の実装手順
 
-### 7.1 HeaderFieldSpec — ヘッダ項目
+**変更画面**は「読み込み（GET）→ 編集 → 保存（PUT）」の更新系。登録画面と **同じ Spec / ColDef / CommitRule / バリデーション** を共有し、ページ Vue と API クライアント・ルートだけ差分実装するのが本リポジトリの標準パターン（受注: `OrderNewPage.vue` → `OrderEditPage.vue`）。
+
+### Step 1: バックエンド契約を確認
+
+- `GET /api/<resource>/{id}` … ヘッダ + 明細配列（404 は不存在）
+- `PUT /api/<resource>/{id}` … リクエストボディは `POST` と同一構造にすることが多い（明細の洗い替え等はサーバ側仕様に従う）
+- 400 の JSON は POST と同じ `ApiErrorResponse` 契約（[16. バックエンド API 契約](#16-バックエンド-api-契約)）
+
+### Step 2: `client.ts` に型と関数を追加
+
+- 詳細レスポンス型（例: `OrderDetailResponse`）
+- `fetchOrder(id)` — 404 をフロントで判別できるようにする（例: 専用メッセージで throw）
+- `updateOrder(id, body)` — 400 は `ApiValidationError`（`createOrder` と同パターン）
+
+### Step 3: 一覧からの遷移
+
+- `ListScreenSpec.rowNavigation` で `routeName` / `paramField` を既に持てる（ダブルクリック用）
+- 追加で F キーから遷移する場合:
+  1. `screenSpecTypes.ts` の `KeyActionId` に `'edit'` を追加（未登録なら）
+  2. 一覧の `keySpec` に例: `F10: 'edit'`
+  3. `ListScreenView.vue` の `useKeySpec` に `edit` ハンドラを渡し、**選択行の `paramField`** で `router.push`
+  4. ツールバーにボタンを置く（ラベルに `（F10）` を含めるとユーザーがキーを把握しやすい）
+
+### Step 4: 登録ページをコピーして変更ページを作る
+
+`OrderNewPage.vue` を `OrderEditPage.vue` にコピーし、主に以下を差し替える。
+
+| 箇所 | 登録 | 変更 |
+|---|---|---|
+| ルート | — | `useRoute()` で `id` を取得。不正 ID は一覧へ戻す |
+| 初期化 | `createEmptyOrderRows()` | `onMounted` で `fetchOrder` → ヘッダ・行をセット。空行を `INITIAL_ROWS` まで埋めるなど登録と同じ操作性に |
+| タイトル | `spec.title` 固定 | 受注番号などを含む `computed`（例: `受注変更（ORD-…）`） |
+| 保存 | `createOrder` | `updateOrder(id, body)`。成功後にクリアしない（そのまま編集継続可） |
+| F1（既定 `new`） | `handleNew` | `useKeySpec` の `getKeySpec` で `F1: 'backToList'` 等に上書きし、`KeyActionId` に `'backToList'` を追加してハンドラで一覧へ `router.push` |
+| シェル左ボタン | 「新規（F01）」 | `RegistrationScreenShell` の `newButtonLabel`（例: `一覧へ戻る（F01）`）、`@new` で一覧遷移 |
+| 受注番号表示 | なし | `headerSubtitle` でヘッダ下に表示可能 |
+
+Spec の読み込みは `resolveOrderScreenSpec('order-new')` のように **登録と同じ id** でよい（`orderNewSpec.ts` を共有）。
+
+### Step 5: ルートを追加
+
+```typescript
+{
+  path: '/orders/:id/edit',
+  name: 'order-edit',
+  component: () => import('@/views/OrderEditPage.vue'),
+  meta: { requiresAuth: true },
+},
+```
+
+### Step 6: ビルド確認
+
+```bash
+npm run build
+```
+
+**参照実装**: `src/views/OrderEditPage.vue`, `src/api/client.ts` の `fetchOrder` / `updateOrder`, `orderListSpec.ts` の `F10: 'edit'`
+
+---
+
+## 8. Spec リファレンス
+
+### 8.1 HeaderFieldSpec — ヘッダ項目
 
 | プロパティ | 型 | 説明 |
 |---|---|---|
@@ -423,7 +489,7 @@ npm run build
 | `defaultDatePlusDays?` | `number` | date 型の初期値（今日 + N日） |
 | `validation?` | `ValidationRule[]` | バリデーションルール |
 
-### 7.2 NavigationSpec — Enter チェーン
+### 8.2 NavigationSpec — Enter チェーン
 
 | プロパティ | 型 | 説明 |
 |---|---|---|
@@ -432,7 +498,7 @@ npm run build
 | `gridEditChainColIds` | `readonly string[]` | グリッド内で Enter で移動する列（左→右の順） |
 | `gridEnterStopEditingColIds` | `readonly string[]` | Enter で `stopEditing` する列 |
 
-### 7.3 ListScreenSpec — 一覧画面
+### 8.3 ListScreenSpec — 一覧画面
 
 | プロパティ | 型 | 説明 |
 |---|---|---|
@@ -450,7 +516,7 @@ npm run build
 | `searchFieldEnterOrder` | `readonly string[]` | 検索ヘッダの Enter 順序 |
 | `keySpec` | `KeySpec` | ファンクションキー割当 |
 
-### 7.4 ListResultColumn — 一覧列
+### 8.4 ListResultColumn — 一覧列
 
 | プロパティ | 型 | 説明 |
 |---|---|---|
@@ -461,17 +527,24 @@ npm run build
 | `spanRows?` | `boolean` | 行スパンを有効にするか |
 | `align?` | `'left' \| 'right' \| 'center'` | セル横位置 |
 
-### 7.5 KeySpec — ファンクションキー
+### 8.5 KeySpec — ファンクションキー
 
 ```typescript
-type KeyActionId = 'new' | 'save' | 'mockAlert' | 'search' | 'clearSearch'
+type KeyActionId =
+  | 'new'
+  | 'save'
+  | 'mockAlert'
+  | 'search'
+  | 'clearSearch'
+  | 'edit'        // 一覧: 選択行を変更ルートへ
+  | 'backToList'  // 変更画面: F1 を一覧戻りに差し替える例
 type FunctionKey = 'F1' | 'F2' | ... | 'F12'
 type KeySpec = Partial<Record<FunctionKey, KeyActionId>>
 ```
 
 ---
 
-## 8. グリッド列定義（ColDef）の組み立て方
+## 9. グリッド列定義（ColDef）の組み立て方
 
 ### 登録画面の列定義
 
@@ -514,7 +587,7 @@ export function buildXxxColumnDefs(products: readonly CodeMasterItem[]): ColDef<
 
 ---
 
-## 9. Editor Registry — フィールド型システム
+## 10. Editor Registry — フィールド型システム
 
 `editorRegistry.ts` は `Partial<ColDef>` をフィールド型から生成する。
 
@@ -537,7 +610,7 @@ export function buildXxxColumnDefs(products: readonly CodeMasterItem[]): ColDef<
 
 ---
 
-## 10. Commit Rules — セル確定時ロジック
+## 11. Commit Rules — セル確定時ロジック
 
 Markdown の「値確定ルール（副作用）」セクションを実装する仕組み。
 
@@ -579,7 +652,7 @@ export function apply<Screen>CommitSpec(event: ..., /* マスタ等 */) {
 
 ---
 
-## 11. バリデーション
+## 12. バリデーション
 
 二層バリデーション: フロント（Spec 宣言ルール）と API 400 を同じ `FieldError` 形式で表示。
 
@@ -643,7 +716,7 @@ const { fieldErrors, globalMessage } = parseApiErrors(apiError.body, <SCREEN>_FI
 
 ---
 
-## 12. Enter ナビゲーション
+## 13. Enter ナビゲーション
 
 ```
 ヘッダ項目 1  ──Enter──▶  ヘッダ項目 2  ──Enter──▶  ...
@@ -662,7 +735,7 @@ const { fieldErrors, globalMessage } = parseApiErrors(apiError.body, <SCREEN>_FI
 
 ---
 
-## 13. ファンクションキー
+## 14. ファンクションキー
 
 ### 組み込みアクション
 
@@ -673,12 +746,14 @@ const { fieldErrors, globalMessage } = parseApiErrors(apiError.body, <SCREEN>_FI
 | `search` | 検索実行 | F12（一覧） |
 | `clearSearch` | 検索条件クリア | F1（一覧） |
 | `mockAlert` | デバッグ用アラート | 任意 |
+| `edit` | 一覧から変更（詳細）ルートへ遷移 | 例: F10（`ListScreenView` で選択行必須） |
+| `backToList` | 変更画面から一覧へ戻る | 例: F1 を `new` の代わりに差し替え |
 
 `defaultKeySpec.ts` の既定を画面の `keySpec` で上書き。
 
 ---
 
-## 14. API クライアント
+## 15. API クライアント
 
 ### `src/api/client.ts` の設計
 
@@ -703,7 +778,7 @@ Markdown で「（未定・モック）」と書かれている場合:
 
 ---
 
-## 15. バックエンド API 契約
+## 16. バックエンド API 契約
 
 ### 共通ルール
 
@@ -743,6 +818,24 @@ DELETE /api/<resource>/{id}
 Response: 204 No Content
 ```
 
+### 1件取得 API（変更画面）
+
+```
+GET /api/<resource>/{id}
+Response: { ヘッダ項目, lines: [明細] }  // プロジェクトの DTO に合わせる
+404: リソースなし
+```
+
+### 更新 API（変更画面）
+
+```
+PUT /api/<resource>/{id}
+Request: POST と同一形が望ましい（フロントは `OrderCreateRequest` 等を流用しやすい）
+Response: POST と同一形が望ましい（例: orderId, orderNumber, message）
+400: バリデーション（POST と同一 JSON 契約）
+404: リソースなし
+```
+
 ### 400 エラーレスポンス
 
 ```json
@@ -762,7 +855,16 @@ Response: 204 No Content
 
 ---
 
-## 16. 実装チェックリスト
+## 17. 実装チェックリスト
+
+### 変更画面
+
+- [ ] `GET /api/<resource>/{id}` / `PUT /api/<resource>/{id}` の型と `client.ts` 関数
+- [ ] 変更ページ Vue（登録ページのコピー + 読み込み・PUT・F1 差し替え）
+- [ ] 一覧の `rowNavigation` と一致するルート（ダブルクリック）
+- [ ] 必要なら一覧 `keySpec` に `F10: 'edit'` と `ListScreenView` の `edit` ハンドラ
+- [ ] `RegistrationScreenShell` の `newButtonLabel` / `headerSubtitle` など必要なら設定
+- [ ] `npm run build` で型エラーなし
 
 ### 登録画面
 
@@ -797,7 +899,7 @@ Response: 204 No Content
   - [ ] `deleteAction` — 削除 API（Markdown に削除がなければ `null`）
   - [ ] `rowNavigation` — ダブルクリック遷移先
   - [ ] `searchParamMapping` — フィールド id と API パラメータ名が異なる場合
-  - [ ] `keySpec` — 通常 `{ F1: 'clearSearch', F12: 'search' }`
+  - [ ] `keySpec` — 通常 `{ F1: 'clearSearch', F12: 'search' }`、変更遷移があれば `F10: 'edit'` 等
 - [ ] `listScreenSpecRegistry.ts` に登録
 - [ ] `client.ts` に検索・削除関数を追加
 - [ ] ルートを追加

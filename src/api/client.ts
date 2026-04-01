@@ -163,3 +163,59 @@ export async function deleteOrder(id: number): Promise<void> {
   const res = await fetch(url, { method: 'DELETE', headers: getAuthHeaders() })
   if (!res.ok) throw new Error(`deleteOrder failed: ${res.status}`)
 }
+
+export type OrderDetailResponse = {
+  id: number
+  orderNumber: string
+  contractPartyCode: string
+  deliveryPartyCode: string
+  deliveryLocation: string | null
+  dueDate: string | null
+  forecastNumber: string | null
+  lines: {
+    lineId: number
+    lineNo: number
+    productCode: string
+    productName: string | null
+    quantity: number
+    unitPrice: number
+    amount: number
+  }[]
+}
+
+export async function fetchOrder(id: number): Promise<OrderDetailResponse> {
+  const url = `${baseUrl}/api/orders/${id}`
+  const res = await fetch(url, { headers: getAuthHeaders() })
+  if (res.status === 404) {
+    throw new Error('fetchOrder:404')
+  }
+  if (!res.ok) throw new Error(`fetchOrder failed: ${res.status}`)
+  return (await res.json()) as OrderDetailResponse
+}
+
+export type OrderUpdateRequest = OrderCreateRequest
+
+export async function updateOrder(
+  id: number,
+  body: OrderUpdateRequest,
+): Promise<OrderCreateResponse> {
+  const url = `${baseUrl}/api/orders/${id}`
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    if (res.status === 400) {
+      try {
+        const errorBody = (await res.json()) as ApiErrorResponse
+        throw new ApiValidationError(res.status, errorBody)
+      } catch (e) {
+        if (e instanceof ApiValidationError) throw e
+        throw new Error(`updateOrder failed: ${res.status}`)
+      }
+    }
+    throw new Error(`updateOrder failed: ${res.status}`)
+  }
+  return (await res.json()) as OrderCreateResponse
+}

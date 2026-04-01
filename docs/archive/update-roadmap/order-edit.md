@@ -101,6 +101,11 @@ useKeySpec(
 
 変更画面に必要な 2 つの API を実装する。
 
+**バックエンド方針（確定）**
+
+- **(A) GET の `productName`**: 明細に保存されている `productName` カラムの値をそのまま返す。`products` マスタとの JOIN による上書き・補完は行わない。
+- **(B) マスタ存在チェック**: 契約先コード・納入先コード・製品コードについて、取引先／製品マスタへの存在確認は行わない（`POST /api/orders` と同様。PUT のみ厳格化しない）。
+
 #### 1-1: 受注取得 API — `GET /api/orders/{id}`
 
 | 項目 | 内容 |
@@ -170,9 +175,8 @@ export type OrderDetailResponse = {
 
 **Spring Boot 実装のポイント:**
 
-- `order_headers` テーブルから 1 件取得
-- `order_lines` テーブルから `order_id` で関連明細を取得（`lineNo` 昇順）
-- JOIN で製品名（`products.name`）を解決
+- 受注ヘッダを ID で 1 件取得し、関連する受注明細を読み込む（`lineNo` 昇順）
+- 明細の `productName` は **保存カラムのみ**（方針 (A)）。マスタ JOIN は不要
 - 存在しない `id` の場合は `404 Not Found`
 
 ```java
@@ -255,6 +259,7 @@ export type OrderUpdateResponse = {
 
 - `findById` で受注ヘッダを取得。なければ `404`
 - バリデーション: `OrderCreateRequest` と同じ Bean Validation を再利用
+- 契約先・納入先・製品コードの **マスタ存在チェックは行わない**（方針 (B)、POST と同様）
 - トランザクション内で:
   1. ヘッダ項目を更新
   2. 既存明細を `DELETE WHERE order_id = ?`
