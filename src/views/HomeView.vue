@@ -103,6 +103,7 @@ async function runLoginAndGoPurchase(username: string, password: string) {
       <RouterLink to="/orders/new" class="cta cta-sub">受注登録画面へ</RouterLink>
       <RouterLink to="/orders/new-alt" class="cta cta-sub">受注登録画面（横展開サンプル）へ</RouterLink>
       <RouterLink to="/purchase/new" class="cta cta-sub">発注登録（デモ・共有エンジン）へ</RouterLink>
+      <RouterLink to="/orders/commit-mock" class="cta cta-sub">受注計上入力（多段 PoC モック）へ</RouterLink>
     </div>
 
     <details class="dev-smoke">

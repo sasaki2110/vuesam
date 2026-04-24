@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
 import ListScreenView from '@/views/ListScreenView.vue'
+import OrderCommitMockPage from '@/views/OrderCommitMockPage.vue'
 import OrderEditPage from '@/views/OrderEditPage.vue'
 import OrderNewPage from '@/views/OrderNewPage.vue'
 import PurchaseNewPage from '@/views/PurchaseNewPage.vue'
@@ -42,6 +43,11 @@ const router = createRouter({
       name: 'purchase-new',
       component: PurchaseNewPage,
       meta: { requiresAuth: true },
+    },
+    {
+      path: '/orders/commit-mock',
+      name: 'order-commit-mock',
+      component: OrderCommitMockPage,
     },
   ],
 })
